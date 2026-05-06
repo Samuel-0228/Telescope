@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,47 +11,87 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { TrendingUp, BarChart3, Users, Zap, Trophy, Calendar, Sparkles, Share2, ArrowRight, Gauge } from 'lucide-react';
 
-// Mock data
-const viewsOverTimeData = [
-  { date: 'Mon', views: 2400 },
-  { date: 'Tue', views: 1398 },
-  { date: 'Wed', views: 9800 },
-  { date: 'Thu', views: 3908 },
-  { date: 'Fri', views: 4800 },
-  { date: 'Sat', views: 3800 },
-  { date: 'Sun', views: 4300 },
-];
-
-const topPosts = [
-  { id: 1, title: 'Breaking: New Feature Release', views: 15420, engagement: 8.2, type: 'NEWS' },
-  { id: 2, title: 'Tutorial: Getting Started Guide', views: 12890, engagement: 9.1, type: 'TUTORIAL' },
-  { id: 3, title: 'Community Spotlight', views: 10450, engagement: 7.8, type: 'COMMUNITY' },
-  { id: 4, title: 'Weekly Newsletter #42', views: 9320, engagement: 6.5, type: 'NEWSLETTER' },
-  { id: 5, title: 'Behind the Scenes', views: 8950, engagement: 9.3, type: 'LIFESTYLE' },
-];
-
-const leaderboard = [
-  { rank: 1, name: 'Tech Daily', engagement: 12.5, views: 285000, category: 'TECHNOLOGY' },
-  { rank: 2, name: 'Growth Hacker', engagement: 11.8, views: 245000, category: 'BUSINESS' },
-  { rank: 3, name: 'Dev Tips', engagement: 11.2, views: 215000, category: 'TECHNOLOGY' },
-  { rank: 4, name: 'AI Insights', engagement: 10.5, views: 185000, category: 'AI' },
-  { rank: 5, name: 'Startup Stories', engagement: 9.8, views: 155000, category: 'BUSINESS' },
-];
-
 export default function SavvyScope() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [timeFilter, setTimeFilter] = useState('30');
   const [channelLink, setChannelLink] = useState('');
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const [theme, setTheme] = useState<'red' | 'grey'>('red');
-
-  const growthScore = 78;
+  
+  // API data states
+  const [channelMetrics, setChannelMetrics] = useState<any>(null);
+  const [viewsOverTimeData, setViewsOverTimeData] = useState<any[]>([]);
+  const [topPosts, setTopPosts] = useState<any[]>([]);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [contentTypePerformance, setContentTypePerformance] = useState<any[]>([]);
+  const [strategies, setStrategies] = useState<any[]>([]);
+  const [growthScore, setGrowthScore] = useState<number>(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const COLORS = theme === 'red' 
     ? ['#ff3333', '#ff6666', '#dd2222', '#00ff88', '#ffaa00']
     : ['#808080', '#a0a0a0', '#606060', '#00ff88', '#ffaa00'];
 
   const primaryColor = theme === 'red' ? '#ff3333' : '#808080';
+
+  // Fetch channel metrics from backend
+  const fetchChannelAnalysis = async () => {
+    if (!channelLink.trim()) {
+      setError('Please enter a channel URL or username');
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await fetch('/api/analyze-channel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel_url: channelLink,
+          time_range: parseInt(timeFilter),
+        }),
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch channel analysis');
+      
+      const data = await response.json();
+      
+      setChannelMetrics(data.metrics);
+      setViewsOverTimeData(data.views_over_time || []);
+      setTopPosts(data.top_posts || []);
+      setContentTypePerformance(data.content_type_performance || []);
+      setStrategies(data.strategies || []);
+      setGrowthScore(data.growth_score || 0);
+      setActiveTab('dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch leaderboard
+  const fetchLeaderboard = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/leaderboard');
+      if (!response.ok) throw new Error('Failed to fetch leaderboard');
+      const data = await response.json();
+      setLeaderboard(data.leaderboard || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch leaderboard on mount
+  useEffect(() => {
+    fetchLeaderboard();
+  }, []);
 
   return (
     <SidebarProvider>
@@ -141,28 +181,40 @@ export default function SavvyScope() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {error && (
+                      <div className="p-3 bg-destructive/10 border border-destructive/50 rounded text-sm text-destructive font-mono">
+                        {error}
+                      </div>
+                    )}
                     <div className="flex flex-col sm:flex-row gap-3">
                       <Input
                         placeholder="Paste Telegram channel link..."
                         value={channelLink}
                         onChange={(e) => setChannelLink(e.target.value)}
                         className="flex-1 text-sm font-mono bg-background border-border text-foreground placeholder:text-muted-foreground"
+                        disabled={loading}
                       />
                       <Button 
-                        className="w-full sm:w-auto font-mono uppercase tracking-wide text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
-                        onClick={() => setChannelLink('')}
+                        className="w-full sm:w-auto font-mono uppercase tracking-wide text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-all disabled:opacity-50"
+                        onClick={fetchChannelAnalysis}
+                        disabled={loading}
                       >
-                        ANALYZE
+                        {loading ? 'ANALYZING...' : 'ANALYZE'}
                       </Button>
                     </div>
                   </CardContent>
                 </Card>
 
                 {/* Time Filter and Key Metrics */}
+                {channelMetrics ? (
                 <div className="space-y-4">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <h3 className="text-sm font-mono uppercase tracking-wider font-semibold">Key Metrics</h3>
-                    <Select value={timeFilter} onValueChange={setTimeFilter}>
+                    <Select value={timeFilter} onValueChange={(value) => {
+                      setTimeFilter(value);
+                      setChannelLink('');
+                      setChannelMetrics(null);
+                    }}>
                       <SelectTrigger className="w-full sm:w-40 text-xs font-mono uppercase tracking-wide bg-card border-border">
                         <SelectValue />
                       </SelectTrigger>
@@ -178,10 +230,10 @@ export default function SavvyScope() {
                   {/* Metrics Grid - Interactive */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     {[
-                      { label: 'TOTAL VIEWS', value: '142.5K', icon: TrendingUp, color: 'text-primary' },
-                      { label: 'AVG VIEWS/POST', value: '8.2K', icon: BarChart3, color: 'text-primary' },
-                      { label: 'POSTS', value: '47', icon: Calendar, color: 'text-primary' },
-                      { label: 'ENGAGEMENT', value: '8.7%', icon: Zap, color: 'text-primary' },
+                      { label: 'TOTAL VIEWS', value: channelMetrics.total_views?.toLocaleString() || '0', icon: TrendingUp, color: 'text-primary' },
+                      { label: 'AVG VIEWS/POST', value: Math.round(channelMetrics.avg_views_per_post || 0).toLocaleString(), icon: BarChart3, color: 'text-primary' },
+                      { label: 'POSTS', value: channelMetrics.number_of_posts || '0', icon: Calendar, color: 'text-primary' },
+                      { label: 'ENGAGEMENT', value: (channelMetrics.engagement_rate || 0).toFixed(1) + '%', icon: Zap, color: 'text-primary' },
                     ].map((metric, idx) => {
                       const Icon = metric.icon;
                       return (
@@ -205,13 +257,21 @@ export default function SavvyScope() {
                     })}
                   </div>
                 </div>
+                ) : (
+                <div className="text-center py-12 space-y-3">
+                  <p className="text-muted-foreground font-mono text-sm">No channel data loaded</p>
+                  <p className="text-xs text-muted-foreground font-mono">Analyze a channel above to view metrics and insights</p>
+                </div>
+                )}
 
+                {channelMetrics && (
+                <>
                 {/* Additional Insights Grid with corner brackets */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {[
-                    { label: 'BEST POSTING DAY', value: 'WEDNESDAY', desc: '↑ 34% more views' },
-                    { label: 'PEAK TIME', value: '10:00 AM', desc: 'Engagement peak hour' },
-                    { label: 'TOP CONTENT', value: 'TUTORIALS', desc: '42% of top posts' },
+                    { label: 'BEST POSTING DAY', value: channelMetrics.best_posting_day || 'N/A', desc: '↑ optimized engagement' },
+                    { label: 'PEAK TIME', value: channelMetrics.best_posting_hour || 'N/A', desc: 'Engagement peak hour' },
+                    { label: 'TOP CONTENT', value: channelMetrics.top_content_type || 'N/A', desc: 'Most performing type' },
                   ].map((item, idx) => (
                     <Card key={idx} className="border border-border bg-card/50 hover:bg-card/80 transition-colors relative overflow-hidden group">
                       <div className="absolute top-0 left-0 w-2 h-2 border-t-2 border-l-2 border-primary opacity-0 group-hover:opacity-100 transition-all"></div>
@@ -226,6 +286,7 @@ export default function SavvyScope() {
                 </div>
 
                 {/* Charts Section */}
+                {viewsOverTimeData.length > 0 && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <Card className="border border-border bg-card/50">
                     <CardHeader>
@@ -259,7 +320,7 @@ export default function SavvyScope() {
                       <ResponsiveContainer width="100%" height={250}>
                         <PieChart>
                           <Pie
-                            data={[
+                            data={contentTypePerformance.length > 0 ? contentTypePerformance : [
                               { name: 'NEWS', value: 35 },
                               { name: 'TUTORIAL', value: 25 },
                               { name: 'COMMUNITY', value: 20 },
@@ -285,7 +346,10 @@ export default function SavvyScope() {
                   </Card>
                 </div>
 
+                )}
+                
                 {/* Top Posts with Interactive Badges */}
+                {topPosts.length > 0 && (
                 <Card className="border border-border bg-card/50">
                   <CardHeader>
                     <CardTitle className="text-xs font-mono uppercase tracking-wide flex items-center gap-2">
@@ -303,7 +367,7 @@ export default function SavvyScope() {
                           </tr>
                         </thead>
                         <tbody>
-                          {topPosts.map((post) => (
+                          {topPosts.map((post: any) => (
                             <tr 
                               key={post.id} 
                               className="border-b border-border hover:bg-card/30 transition-colors cursor-pointer"
@@ -321,9 +385,9 @@ export default function SavvyScope() {
                                   </Badge>
                                 </div>
                               </td>
-                              <td className="text-right py-3 px-2 hidden sm:table-cell text-sm font-mono text-foreground">{post.views.toLocaleString()}</td>
+                              <td className="text-right py-3 px-2 hidden sm:table-cell text-sm font-mono text-foreground">{post.views?.toLocaleString() || '0'}</td>
                               <td className={`text-right py-3 px-2 font-mono font-bold text-sm transition-colors ${hoveredCard === `post-${post.id}` ? 'text-primary' : 'text-muted-foreground'}`}>
-                                {post.engagement}%
+                                {(post.engagement || 0).toFixed(1)}%
                               </td>
                             </tr>
                           ))}
@@ -332,6 +396,9 @@ export default function SavvyScope() {
                     </div>
                   </CardContent>
                 </Card>
+                )}
+                </>
+                )}
               </div>
             )}
 
@@ -416,8 +483,13 @@ export default function SavvyScope() {
                   <p className="text-sm text-muted-foreground font-mono">Ranked by engagement rate (Last 30 days)</p>
                 </div>
 
+                {loading ? (
+                  <div className="text-center py-12">
+                    <p className="text-muted-foreground font-mono text-sm">Loading leaderboard...</p>
+                  </div>
+                ) : leaderboard.length > 0 ? (
                 <div className="grid grid-cols-1 gap-3">
-                  {leaderboard.map((channel) => (
+                  {leaderboard.map((channel: any) => (
                     <Card 
                       key={channel.rank} 
                       className="border border-border bg-card/50 hover:bg-card/80 transition-all cursor-pointer"
@@ -461,12 +533,12 @@ export default function SavvyScope() {
                             <div>
                               <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Engagement</p>
                               <p className={`font-mono font-bold text-sm mt-1 transition-colors ${hoveredCard === `rank-${channel.rank}` ? 'text-primary' : 'text-foreground'}`}>
-                                {channel.engagement}%
+                                {(channel.engagement_rate || 0).toFixed(1)}%
                               </p>
                             </div>
                             <div className="hidden sm:block">
                               <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Views</p>
-                              <p className="font-mono font-bold text-sm mt-1">{(channel.views / 1000).toFixed(0)}K</p>
+                              <p className="font-mono font-bold text-sm mt-1">{((channel.total_views_30d || 0) / 1000).toFixed(0)}K</p>
                             </div>
                           </div>
                         </div>
@@ -474,17 +546,29 @@ export default function SavvyScope() {
                     </Card>
                   ))}
                 </div>
+                ) : (
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground font-mono text-sm">No leaderboard data available</p>
+                </div>
+                )}
               </div>
             )}
 
             {/* Strategy Tab */}
             {activeTab === 'strategy' && (
               <div className="space-y-6">
-                <div className="space-y-2">
-                  <h2 className="text-2xl sm:text-4xl font-mono font-bold text-foreground">
-                    <span className="text-primary">GROWTH</span> STRATEGY
-                  </h2>
-                  <p className="text-sm text-muted-foreground font-mono">AI-powered recommendations for channel growth</p>
+                {channelMetrics ? (
+                <>
+                <div className="border-b border-border pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="relative w-4 h-4 flex-shrink-0">
+                      <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(0 30%, 0 0, 30% 0, 30% 30%, 0 30%)'}} />
+                    </div>
+                    <h2 className="text-sm font-mono font-bold text-foreground uppercase tracking-widest">
+                      STRATEGY
+                    </h2>
+                    <div className="flex-1 h-px bg-border"></div>
+                  </div>
                 </div>
 
                 <Card className="border border-border bg-card/50 relative overflow-hidden">
@@ -515,13 +599,9 @@ export default function SavvyScope() {
                   </CardContent>
                 </Card>
 
+                {strategies.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[
-                    { title: 'OPTIMAL POST TIME', desc: 'Post between 10 AM - 2 PM for maximum engagement', symbol: '⏱' },
-                    { title: 'CONTENT MIX', desc: 'Increase tutorials from 25% to 35% of content', symbol: '▦' },
-                    { title: 'POSTING FREQUENCY', desc: 'Increase to 4 posts/day for better reach', symbol: '⬆' },
-                    { title: 'ENGAGEMENT FOCUS', desc: 'Ask questions in 60% of posts to boost interaction', symbol: '◈' },
-                  ].map((strategy, idx) => (
+                  {strategies.map((strategy: any, idx: number) => (
                     <Card 
                       key={idx} 
                       className="border border-border bg-card/50 hover:border-primary/50 transition-all cursor-pointer group relative overflow-hidden"
@@ -530,12 +610,16 @@ export default function SavvyScope() {
                       <CardContent className="pt-4 pb-4 pl-4">
                         <div className="space-y-2">
                           <div className="flex items-center gap-3">
-                            <div className="w-6 h-6 border border-primary text-primary flex items-center justify-center text-xs font-mono font-bold">
-                              {strategy.symbol}
+                            <div className="relative w-5 h-5 flex items-center justify-center">
+                              <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(0 20%, 0 0, 20% 0, 20% 20%, 0 20%)'}} />
+                              <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(80% 0, 100% 0, 100% 20%, 80% 20%, 80% 0)'}} />
+                              <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(0 80%, 0 100%, 20% 100%, 20% 80%, 0 80%)'}} />
+                              <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(100% 100%, 100% 80%, 80% 80%, 80% 100%, 100% 100%)'}} />
+                              <div className="w-1 h-1 bg-primary rounded-full" />
                             </div>
                             <p className="font-mono font-bold text-sm text-foreground uppercase tracking-wider">{strategy.title}</p>
                           </div>
-                          <p className="text-xs text-muted-foreground font-mono">{strategy.desc}</p>
+                          <p className="text-xs text-muted-foreground font-mono">{strategy.description}</p>
                           <div className="flex items-center gap-1 mt-3 text-primary opacity-0 group-hover:opacity-100 transition-opacity">
                             <span className="text-xs font-mono uppercase tracking-wider">Learn more</span>
                             <ArrowRight className="w-3 h-3" />
@@ -545,6 +629,18 @@ export default function SavvyScope() {
                     </Card>
                   ))}
                 </div>
+                ) : (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground font-mono text-sm">No strategies generated yet</p>
+                </div>
+                )}
+                </>
+                ) : (
+                <div className="text-center py-12 space-y-3">
+                  <p className="text-muted-foreground font-mono text-sm">No strategy data available</p>
+                  <p className="text-xs text-muted-foreground font-mono">Analyze a channel to generate personalized growth strategies</p>
+                </div>
+                )}
               </div>
             )}
           </div>
