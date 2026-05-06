@@ -517,10 +517,10 @@ export default function SavvyScope() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[
-                    { title: 'OPTIMAL POST TIME', desc: 'Post between 10 AM - 2 PM for maximum engagement' },
-                    { title: 'CONTENT MIX', desc: 'Increase tutorials from 25% to 35% of content' },
-                    { title: 'POSTING FREQUENCY', desc: 'Increase to 4 posts/day for better reach' },
-                    { title: 'ENGAGEMENT FOCUS', desc: 'Ask questions in 60% of posts to boost interaction' },
+                    { title: 'OPTIMAL POST TIME', desc: 'Post between 10 AM - 2 PM for maximum engagement', symbol: '⏱' },
+                    { title: 'CONTENT MIX', desc: 'Increase tutorials from 25% to 35% of content', symbol: '▦' },
+                    { title: 'POSTING FREQUENCY', desc: 'Increase to 4 posts/day for better reach', symbol: '⬆' },
+                    { title: 'ENGAGEMENT FOCUS', desc: 'Ask questions in 60% of posts to boost interaction', symbol: '◈' },
                   ].map((strategy, idx) => (
                     <Card 
                       key={idx} 
@@ -530,12 +530,8 @@ export default function SavvyScope() {
                       <CardContent className="pt-4 pb-4 pl-4">
                         <div className="space-y-2">
                           <div className="flex items-center gap-3">
-                            <div className="relative w-5 h-5 flex items-center justify-center">
-                              <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(0 20%, 0 0, 20% 0, 20% 20%, 0 20%)'}} />
-                              <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(80% 0, 100% 0, 100% 20%, 80% 20%, 80% 0)'}} />
-                              <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(0 80%, 0 100%, 20% 100%, 20% 80%, 0 80%)'}} />
-                              <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(100% 100%, 100% 80%, 80% 80%, 80% 100%, 100% 100%)'}} />
-                              <div className="w-1 h-1 bg-primary rounded-full" />
+                            <div className="w-6 h-6 border border-primary text-primary flex items-center justify-center text-xs font-mono font-bold">
+                              {strategy.symbol}
                             </div>
                             <p className="font-mono font-bold text-sm text-foreground uppercase tracking-wider">{strategy.title}</p>
                           </div>
