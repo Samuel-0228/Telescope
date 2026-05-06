@@ -11,10 +11,12 @@ interface MetricsCacheRecord {
 interface RepositoryShape {
   upsertChannel(channel: ChannelRecord): Promise<ChannelRecord>;
   findChannelByUsername(username: string): Promise<ChannelRecord | null>;
+  listTrackedChannels(limit: number): Promise<ChannelRecord[]>;
   upsertPosts(channelId: string, posts: PostRecord[]): Promise<void>;
   readMetricsCache(channelId: string, timeRange: TimeRange): Promise<MetricsCacheRecord | null>;
   writeMetricsCache(channelId: string, timeRange: TimeRange, payload: unknown): Promise<void>;
   readLeaderboard(): Promise<LeaderboardEntry[] | null>;
+  refreshLeaderboardFromPosts(limit: number): Promise<boolean>;
   writeLeaderboard(entries: LeaderboardEntry[]): Promise<void>;
 }
 
@@ -34,6 +36,10 @@ class MemoryRepository implements RepositoryShape {
 
   async findChannelByUsername(username: string): Promise<ChannelRecord | null> {
     return this.channels.get(username) || null;
+  }
+
+  async listTrackedChannels(limit: number): Promise<ChannelRecord[]> {
+    return Array.from(this.channels.values()).slice(0, limit);
   }
 
   async upsertPosts(channelId: string, posts: PostRecord[]): Promise<void> {
@@ -69,6 +75,10 @@ class MemoryRepository implements RepositoryShape {
     return this.leaderboard.length ? this.leaderboard : null;
   }
 
+  async refreshLeaderboardFromPosts(_limit: number): Promise<boolean> {
+    return false;
+  }
+
   async writeLeaderboard(entries: LeaderboardEntry[]): Promise<void> {
     this.leaderboard = entries;
   }
@@ -90,6 +100,7 @@ class SupabaseRepository implements RepositoryShape {
           username: channel.username,
           category: channel.category,
           created_at: channel.createdAt,
+          updated_at: new Date().toISOString(),
         },
         { onConflict: 'username' },
       )
@@ -131,6 +142,26 @@ class SupabaseRepository implements RepositoryShape {
       category: data.category,
       createdAt: data.created_at,
     };
+  }
+
+  async listTrackedChannels(limit: number): Promise<ChannelRecord[]> {
+    const { data, error } = await this.client
+      .from('channels')
+      .select('id, name, username, category, created_at')
+      .order('updated_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Failed to list tracked channels: ${error.message}`);
+    }
+
+    return (data || []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      username: row.username,
+      category: row.category,
+      createdAt: row.created_at,
+    }));
   }
 
   async upsertPosts(channelId: string, posts: PostRecord[]): Promise<void> {
@@ -223,6 +254,23 @@ class SupabaseRepository implements RepositoryShape {
         total_views_30d: row.total_views_30d,
       };
     });
+  }
+
+  async refreshLeaderboardFromPosts(limit: number): Promise<boolean> {
+    const { error } = await this.client.rpc('refresh_leaderboard_from_posts', {
+      top_n: limit,
+    });
+
+    if (error) {
+      // If the function is not installed yet, gracefully fallback to app-level generation.
+      if (error.message.toLowerCase().includes('could not find the function')) {
+        return false;
+      }
+
+      throw new Error(`Failed to refresh leaderboard from posts: ${error.message}`);
+    }
+
+    return true;
   }
 
   async writeLeaderboard(entries: LeaderboardEntry[]): Promise<void> {

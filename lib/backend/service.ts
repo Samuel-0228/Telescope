@@ -127,9 +127,25 @@ const buildLeaderboardFromAnalyses = (analyses: AnalyzedChannelResponse[]): Lead
 };
 
 export const refreshLeaderboard = async (): Promise<LeaderboardEntry[]> => {
-  const cached = await repository.readLeaderboard();
-  if (cached?.length) {
-    return cached;
+  const topN = 10;
+
+  const refreshedFromPosts = await repository.refreshLeaderboardFromPosts(topN);
+  if (refreshedFromPosts) {
+    const fromPosts = await repository.readLeaderboard();
+    if (fromPosts?.length) {
+      return fromPosts;
+    }
+  }
+
+  const trackedChannels = await repository.listTrackedChannels(topN);
+  if (trackedChannels.length) {
+    const analyses = await Promise.all(
+      trackedChannels.map((channel) => analyzeChannel({ channelReference: channel.username, timeRange: '30' })),
+    );
+
+    const leaderboard = buildLeaderboardFromAnalyses(analyses);
+    await repository.writeLeaderboard(leaderboard);
+    return leaderboard;
   }
 
   const seedChannels = generateLeaderboardSeeds();

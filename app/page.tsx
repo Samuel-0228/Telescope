@@ -54,8 +54,11 @@ export default function SavvyScope() {
           time_range: timeFilter,
         }),
       });
-      
-      if (!response.ok) throw new Error('Failed to fetch channel analysis');
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        throw new Error(errorPayload?.error || 'Failed to fetch channel analysis');
+      }
       
       const data = await response.json();
       

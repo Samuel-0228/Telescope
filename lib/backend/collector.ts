@@ -30,6 +30,30 @@ const buildChannelRecord = (reference: string): ChannelRecord => {
   return generateSyntheticChannel(username);
 };
 
+const getTimeRangeStart = (timeRange: TimeRange): Date | null => {
+  if (timeRange === 'all') {
+    return null;
+  }
+
+  const days = Number(timeRange);
+  if (!Number.isFinite(days) || days <= 0) {
+    return null;
+  }
+
+  const start = new Date();
+  start.setUTCDate(start.getUTCDate() - days);
+  return start;
+};
+
+const decodeHtml = (value: string): string =>
+  value
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"');
+
 class SyntheticTelegramCollector implements TelegramCollector {
   async collectChannel(channelReference: string, timeRange: TimeRange): Promise<TelegramCollectionResult> {
     const channel = buildChannelRecord(channelReference);
@@ -53,7 +77,7 @@ class ScraperTelegramCollector extends SyntheticTelegramCollector {
   async collectChannel(channelReference: string, timeRange: TimeRange): Promise<TelegramCollectionResult> {
     const username = normalizeTelegramUsername(channelReference);
     if (!username) {
-      return super.collectChannel(channelReference, timeRange);
+      throw new Error('Please enter a valid public Telegram channel username or URL.');
     }
 
     const url = `https://t.me/s/${encodeURIComponent(username)}`;
@@ -61,7 +85,7 @@ class ScraperTelegramCollector extends SyntheticTelegramCollector {
     try {
       const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (SavvyScope)' } });
       if (!res.ok) {
-        return super.collectChannel(channelReference, timeRange);
+        throw new Error(`Telegram channel fetch failed with status ${res.status}. Ensure the channel is public.`);
       }
 
       const html = await res.text();
@@ -78,55 +102,60 @@ class ScraperTelegramCollector extends SyntheticTelegramCollector {
         createdAt: new Date().toISOString(),
       };
 
-      // Find message date anchors to iterate posts
-      const dateAnchorRegex = /<a[^>]+class="tgme_widget_message_date"[^>]*>\s*<time[^>]+datetime="([^"]+)"/gi;
+      const messageBlockRegex = /<div class="tgme_widget_message_wrap[\s\S]*?<\/article>\s*<\/div>/gi;
+      const datetimeRegex = /<time[^>]+datetime="([^"]+)"/i;
+      const postLinkRegex = /href="https:\/\/t\.me\/([^"/]+)\/(\d+)"/i;
       const textBlockRegex = /<div[^>]+class="tgme_widget_message_text"[^>]*>([\s\S]*?)<\/div>/i;
       const viewsRegex = /tgme_widget_message_views[^>]*>([0-9,\.\s]+)/i;
       const photoRegex = /tgme_widget_message_media_photo/i;
       const videoRegex = /tgme_widget_message_video_or_photo|tgme_widget_message_video/i;
+      const cutoff = getTimeRangeStart(timeRange);
 
       const posts: PostRecord[] = [];
 
-      // iterate through date anchors and for each find surrounding content
-      let match: RegExpExecArray | null;
-      while ((match = dateAnchorRegex.exec(html)) !== null) {
-        const datetime = match[1];
-        const idx = match.index;
+      let blockMatch: RegExpExecArray | null;
+      while ((blockMatch = messageBlockRegex.exec(html)) !== null) {
+        const block = blockMatch[0];
 
-        // search backward for the nearest text block before this anchor
-        const before = html.slice(0, idx);
-        const lastTextMatch = before.match(/<div[^>]+class="tgme_widget_message_text"[^>]*>[\s\S]*?<\/div>(?![\s\S]*<div[^>]+class="tgme_widget_message_text")/i);
-        let content = '';
-        if (lastTextMatch) {
-          content = lastTextMatch[0].replace(/<[^>]+>/g, '').trim();
-        } else {
-          // fallback: try to find any text block after anchor
-          const after = html.slice(idx);
-          const afterMatch = after.match(textBlockRegex);
-          content = afterMatch ? afterMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+        const datetimeMatch = block.match(datetimeRegex);
+        if (!datetimeMatch) {
+          continue;
         }
 
-        // find views near this index (after)
-        const afterSlice = html.slice(idx, idx + 800);
-        const viewsMatch = afterSlice.match(viewsRegex);
+        const timestamp = new Date(datetimeMatch[1]);
+        if (Number.isNaN(timestamp.getTime())) {
+          continue;
+        }
+
+        if (cutoff && timestamp < cutoff) {
+          continue;
+        }
+
+        const linkMatch = block.match(postLinkRegex);
+        const externalPostId = linkMatch ? `${linkMatch[1]}_${linkMatch[2]}` : `${username}_${timestamp.toISOString()}`;
+
+        const textMatch = block.match(textBlockRegex);
+        const content = textMatch
+          ? decodeHtml(textMatch[1].replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim())
+          : '(no text)';
+
+        const viewsMatch = block.match(viewsRegex);
         const views = viewsMatch ? Number(viewsMatch[1].replace(/[\D]/g, '')) : 0;
 
-        // detect media type around the anchor
-        const windowSlice = html.slice(Math.max(0, idx - 600), idx + 600);
         let mediaType: PostRecord['mediaType'] = 'text';
-        if (photoRegex.test(windowSlice)) mediaType = 'image';
-        if (videoRegex.test(windowSlice)) mediaType = 'video';
+        if (photoRegex.test(block)) mediaType = 'image';
+        if (videoRegex.test(block)) mediaType = 'video';
 
         const post: PostRecord = {
-          id: `scrape_${username}_${datetime}`,
+          id: `scrape_${username}_${externalPostId}`,
           channelId: channel.id,
-          externalPostId: `${username}_${datetime}`,
+          externalPostId,
           content: content || '(no text)',
           mediaType,
           views,
           reactions: 0,
           comments: 0,
-          timestamp: new Date(datetime).toISOString(),
+          timestamp: timestamp.toISOString(),
           raw: { source: 'scraper' },
         };
 
@@ -134,7 +163,7 @@ class ScraperTelegramCollector extends SyntheticTelegramCollector {
       }
 
       if (!posts.length) {
-        return super.collectChannel(channelReference, timeRange);
+        throw new Error('No public posts found for this channel in the selected time range.');
       }
 
       return {
@@ -143,7 +172,11 @@ class ScraperTelegramCollector extends SyntheticTelegramCollector {
         source: 'scraper',
       };
     } catch (err) {
-      return super.collectChannel(channelReference, timeRange);
+      if (err instanceof Error) {
+        throw err;
+      }
+
+      throw new Error('Failed to scrape Telegram channel.');
     }
   }
 }
