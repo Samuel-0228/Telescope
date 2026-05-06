@@ -247,6 +247,16 @@ export default function ThreeFortyEight() {
                     <Icon className="w-4 h-4" />
                     <span>{label}</span>
                   </SidebarMenuButton>
+                  {id === 'strategy' && (
+                    <a
+                      href="https://t.me/savvy_society"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 ml-9 block text-[10px] font-mono uppercase tracking-wider text-primary/80 hover:text-primary transition-colors"
+                    >
+                      built by savvy
+                    </a>
+                  )}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
