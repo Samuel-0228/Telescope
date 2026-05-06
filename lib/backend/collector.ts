@@ -77,7 +77,11 @@ const parseTelegramCount = (value: string | null | undefined): number => {
 
   if (!compactMatch) {
     const digits = normalized.replace(/[^\d]/g, '');
-    return digits ? Number(digits) : 0;
+    if (!digits || digits.length > 9) {
+      return 0;
+    }
+
+    return Number(digits);
   }
 
   const amount = Number(compactMatch[1]);
@@ -131,8 +135,14 @@ const extractCountFromText = (value: string | null | undefined): number => {
     return 0;
   }
 
-  const directMatch = value.replace(/\u00a0/g, ' ').match(/([\d,.]+(?:\.?\d+)?\s*[kmb]?)/i);
-  return parseTelegramCount(directMatch?.[1] || value);
+  const normalized = value.replace(/\u00a0/g, ' ').trim();
+  const tokenMatch = normalized.match(/^([\d,.]+(?:\.\d+)?\s*[kmb]?)\s*(?:views?|view|replies?|comments?|reactions?)?$/i);
+
+  if (tokenMatch?.[1]) {
+    return parseTelegramCount(tokenMatch[1]);
+  }
+
+  return 0;
 };
 
 const extractMessageText = ($wrap: any): string => {
