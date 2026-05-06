@@ -1,3 +1,4 @@
+import { load } from 'cheerio';
 import type { ChannelRecord, PostRecord, TimeRange } from './types';
 import { generateSyntheticChannel, generateSyntheticPosts } from './mock-data';
 import { normalizeTelegramUsername } from './utils';
@@ -86,57 +87,83 @@ const parseTelegramCount = (value: string | null | undefined): number => {
 };
 
 const extractChannelName = (html: string, username: string): string => {
-  const patterns = [
-    /<meta[^>]+property="og:title"[^>]+content="([^"]+)"/i,
-    /class="tgme_channel_info_header_title"[^>]*>\s*<span[^>]*>([\s\S]*?)<\/span>/i,
-    /class="tgme_widget_channel_title"[^>]*>([\s\S]*?)<\//i,
+  const $ = load(html);
+  const titleCandidates = [
+    $('meta[property="og:title"]').attr('content'),
+    $('.tgme_channel_info_header_title span').first().text(),
+    $('.tgme_widget_channel_title').first().text(),
   ];
 
-  for (const pattern of patterns) {
-    const match = html.match(pattern);
-    if (match?.[1]) {
-      const name = stripHtml(match[1]);
-      if (name) {
-        return name;
-      }
+  for (const candidate of titleCandidates) {
+    const name = normalizeText(candidate || '');
+    if (name) {
+      return name;
     }
   }
 
   return username;
 };
 
-const extractMessageSegments = (html: string): string[] => {
-  const postMatches = Array.from(html.matchAll(/data-post="([^"]+\/\d+)"/gi));
-  if (postMatches.length) {
-    return postMatches.map((match, index) => {
-      const nearestDiv = html.lastIndexOf('<div', match.index ?? 0);
-      const startIndex = nearestDiv >= 0 ? nearestDiv : match.index ?? 0;
-      const endIndex = index < postMatches.length - 1 ? postMatches[index + 1].index ?? html.length : html.length;
-      return html.slice(startIndex, endIndex);
-    });
+const normalizeText = (value: string): string =>
+  decodeHtml(value)
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const extractExternalPostPath = ($: any, $wrap: any, username: string): string | null => {
+  const dataPost = $wrap.attr('data-post') || $wrap.find('[data-post]').first().attr('data-post');
+  if (dataPost && /\/.+\/\d+/.test(dataPost)) {
+    return dataPost;
   }
 
-  const wrapMatches = html.match(/<div class="tgme_widget_message_wrap[\s\S]*?<\/div>\s*<\/div>/gi);
-  return wrapMatches || [];
+  const linkHref = $wrap
+    .find('a[href^="https://t.me/"]')
+    .toArray()
+    .map((element) => $(element).attr('href') || '')
+    .find((href) => href.includes(`https://t.me/${username}/`) && /\/\d+(?:\?|#|$)/.test(href));
+
+  const hrefMatch = linkHref?.match(/https:\/\/t\.me\/([^/?#]+\/\d+)/i);
+  return hrefMatch?.[1] || null;
+};
+
+const extractCountFromText = (value: string | null | undefined): number => {
+  if (!value) {
+    return 0;
+  }
+
+  const directMatch = value.replace(/\u00a0/g, ' ').match(/([\d,.]+(?:\.?\d+)?\s*[kmb]?)/i);
+  return parseTelegramCount(directMatch?.[1] || value);
+};
+
+const extractMessageText = ($wrap: any): string => {
+  const contentNode = $wrap.find('.tgme_widget_message_text, .tgme_widget_message_caption').first().clone();
+  if (!contentNode.length) {
+    return '';
+  }
+
+  contentNode.find('.tgme_widget_message_replies, .tgme_widget_message_views, .tgme_widget_message_reaction, .tgme_widget_message_meta').remove();
+  contentNode.find('br').replaceWith('\n');
+  return normalizeText(stripHtml(contentNode.html() || contentNode.text()));
 };
 
 const extractPostsFromHtml = (html: string, channel: ChannelRecord, cutoff: Date | null, fallback = false): PostRecord[] => {
-  const segments = extractMessageSegments(html);
+  const $ = load(html);
+  const segments = $('div.tgme_widget_message_wrap').toArray();
   const posts: PostRecord[] = [];
 
   for (const segment of segments) {
-    const postPathMatch = segment.match(/data-post="([^"]+\/\d+)"/i) || segment.match(/href="https:\/\/t\.me\/([^"/]+\/\d+)"/i);
-    const externalPostPath = postPathMatch?.[1];
+    const $segment = $(segment);
+    const externalPostPath = extractExternalPostPath($, $segment, channel.username);
     if (!externalPostPath) {
       continue;
     }
 
-    const datetimeMatch = segment.match(/<time[^>]+datetime="([^"]+)"/i);
-    if (!datetimeMatch) {
+    const datetimeValue = $segment.find('time[datetime]').first().attr('datetime');
+    if (!datetimeValue) {
       continue;
     }
 
-    const timestamp = new Date(datetimeMatch[1]);
+    const timestamp = new Date(datetimeValue);
     if (Number.isNaN(timestamp.getTime())) {
       continue;
     }
@@ -145,21 +172,25 @@ const extractPostsFromHtml = (html: string, channel: ChannelRecord, cutoff: Date
       continue;
     }
 
-    const textMatch =
-      segment.match(/class="tgme_widget_message_text[^"]*"[^>]*>([\s\S]*?)<\/div>/i) ||
-      segment.match(/class="tgme_widget_message_caption[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
-    const content = textMatch ? stripHtml(textMatch[1]) : '(no text)';
+    const content = extractMessageText($segment) || '(media post)';
 
-    const viewMatch =
-      segment.match(/data-view="([^"]+)"/i) ||
-      segment.match(/tgme_widget_message_views[^>]*>([^<]+)/i);
-    const views = parseTelegramCount(viewMatch?.[1]);
+    const viewText = $segment.find('.tgme_widget_message_views').first().text() || $segment.find('[data-view]').first().attr('data-view');
+    const views = extractCountFromText(viewText);
+
+    const commentsText =
+      $segment.find('.tgme_widget_message_comments').first().text() ||
+      $segment.find('[class*="comments"]').first().text() ||
+      '';
+    const comments = extractCountFromText(commentsText);
+
+    const reactionsText = $segment.find('.tgme_widget_message_reactions').first().text() || '';
+    const reactions = extractCountFromText(reactionsText);
 
     let mediaType: PostRecord['mediaType'] = 'text';
-    if (/tgme_widget_message_document/i.test(segment)) mediaType = 'document';
-    if (/tgme_widget_message_voice_player|tgme_widget_message_audio/i.test(segment)) mediaType = 'audio';
-    if (/tgme_widget_message_video_player|tgme_widget_message_video/i.test(segment)) mediaType = 'video';
-    if (/tgme_widget_message_photo_wrap|tgme_widget_message_media_photo/i.test(segment)) mediaType = 'image';
+    if ($segment.find('.tgme_widget_message_document, .tgme_widget_message_file').length) mediaType = 'document';
+    if ($segment.find('.tgme_widget_message_voice_player, .tgme_widget_message_audio').length) mediaType = 'audio';
+    if ($segment.find('.tgme_widget_message_video_player, .tgme_widget_message_video').length) mediaType = 'video';
+    if ($segment.find('.tgme_widget_message_photo_wrap, .tgme_widget_message_media_photo').length) mediaType = 'image';
 
     posts.push({
       id: `scrape_${channel.username}_${externalPostPath.replace('/', '_')}`,
@@ -168,14 +199,29 @@ const extractPostsFromHtml = (html: string, channel: ChannelRecord, cutoff: Date
       content: content || '(no text)',
       mediaType,
       views,
-      reactions: 0,
-      comments: 0,
+      reactions,
+      comments,
       timestamp: timestamp.toISOString(),
-      raw: { source: 'scraper', fallback },
+      raw: {
+        source: 'scraper',
+        fallback,
+        extracted: {
+          hasViews: views > 0,
+          hasComments: comments > 0,
+          hasReactions: reactions > 0,
+        },
+      },
     });
   }
 
-  return posts;
+  const deduped = new Map<string, PostRecord>();
+  posts.forEach((post) => {
+    if (!deduped.has(post.externalPostId)) {
+      deduped.set(post.externalPostId, post);
+    }
+  });
+
+  return Array.from(deduped.values()).sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
 };
 
 class SyntheticTelegramCollector implements TelegramCollector {

@@ -18,6 +18,17 @@ const getEngagementRate = (post: PostRecord): number => {
   return ((post.reactions + post.comments) / post.views) * 100;
 };
 
+const hasDirectEngagementSignals = (posts: PostRecord[]): boolean =>
+  posts.some((post) => post.reactions > 0 || post.comments > 0);
+
+const getPostPerformanceScore = (post: PostRecord, preferViews: boolean): number => {
+  if (preferViews) {
+    return post.views;
+  }
+
+  return getEngagementRate(post);
+};
+
 const getTopContentType = (rows: Array<{ name: MediaType; totalEngagement: number }>): MediaType | 'mixed' => {
   const sorted = rows
     .filter((row) => row.totalEngagement > 0)
@@ -43,17 +54,17 @@ const calculateViewsTrend = (posts: PostRecord[]): Array<{ date: string; views: 
     .map(([date, views]) => ({ date, views }));
 };
 
-const calculateTopPosts = (posts: PostRecord[]): ChannelMetrics['topPosts'] =>
+const calculateTopPosts = (posts: PostRecord[], preferViews: boolean): ChannelMetrics['topPosts'] =>
   posts
     .map((post) => ({
       id: post.id,
       title: post.content.length > 70 ? `${post.content.slice(0, 67)}...` : post.content,
       type: post.mediaType,
       views: post.views,
-      engagement: getEngagementRate(post),
+      engagement: getPostPerformanceScore(post, preferViews),
       timestamp: post.timestamp,
     }))
-    .sort((left, right) => right.engagement - left.engagement)
+    .sort((left, right) => right.engagement - left.engagement || right.views - left.views)
     .slice(0, 5);
 
 const calculateContentTypePerformance = (
@@ -73,7 +84,7 @@ const calculateContentTypePerformance = (
     .sort((left, right) => right.value - left.value);
 };
 
-const calculateBestDayAndHour = (posts: PostRecord[]): { bestPostingDay: string; bestPostingHour: string } => {
+const calculateBestDayAndHour = (posts: PostRecord[], preferViews: boolean): { bestPostingDay: string; bestPostingHour: string } => {
   const dayBuckets = new Map<number, { totalEngagement: number; count: number }>();
   const hourBuckets = new Map<number, { totalEngagement: number; count: number }>();
 
@@ -81,7 +92,7 @@ const calculateBestDayAndHour = (posts: PostRecord[]): { bestPostingDay: string;
     const date = new Date(post.timestamp);
     const dayKey = date.getUTCDay();
     const hourKey = date.getUTCHours();
-    const engagement = getEngagementRate(post);
+    const engagement = getPostPerformanceScore(post, preferViews);
 
     const dayBucket = dayBuckets.get(dayKey) || { totalEngagement: 0, count: 0 };
     dayBucket.totalEngagement += engagement;
@@ -112,6 +123,7 @@ export const calculateChannelMetrics = (posts: PostRecord[], _timeRange: TimeRan
   const orderedPosts = [...posts].sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
   const totalViews = orderedPosts.reduce((sum, post) => sum + post.views, 0);
   const totalEngagement = orderedPosts.reduce((sum, post) => sum + post.reactions + post.comments, 0);
+  const preferViews = !hasDirectEngagementSignals(orderedPosts);
   const numberOfPosts = orderedPosts.length;
   const avgViewsPerPost = numberOfPosts ? totalViews / numberOfPosts : 0;
   const firstPostDate = orderedPosts[numberOfPosts - 1] ? new Date(orderedPosts[numberOfPosts - 1].timestamp) : new Date();
@@ -124,11 +136,12 @@ export const calculateChannelMetrics = (posts: PostRecord[], _timeRange: TimeRan
     const bucket = mediaRows.find((row) => row.name === post.mediaType) || mediaRows[0];
     bucket.count += 1;
     bucket.totalViews += post.views;
-    bucket.totalEngagement += post.reactions + post.comments;
+    bucket.totalEngagement += preferViews ? post.views : post.reactions + post.comments;
   });
 
-  const engagementRate = totalViews ? toPercent(totalEngagement / totalViews) : 0;
-  const { bestPostingDay, bestPostingHour } = calculateBestDayAndHour(orderedPosts);
+  const peakViews = orderedPosts[0]?.views || 0;
+  const engagementRate = preferViews ? (peakViews ? toPercent(avgViewsPerPost / peakViews) : 0) : totalViews ? toPercent(totalEngagement / totalViews) : 0;
+  const { bestPostingDay, bestPostingHour } = calculateBestDayAndHour(orderedPosts, preferViews);
   const contentTypePerformance = calculateContentTypePerformance(mediaRows, numberOfPosts);
   const topContentType = getTopContentType(mediaRows);
 
@@ -143,7 +156,7 @@ export const calculateChannelMetrics = (posts: PostRecord[], _timeRange: TimeRan
     topContentType,
     contentTypePerformance,
     viewsTrend: calculateViewsTrend(orderedPosts),
-    topPosts: calculateTopPosts(orderedPosts),
+    topPosts: calculateTopPosts(orderedPosts, preferViews),
   };
 };
 
@@ -167,9 +180,10 @@ export const analyzePatterns = (posts: PostRecord[], metrics: ChannelMetrics): P
     };
   }
 
+  const preferViews = !hasDirectEngagementSignals(posts);
   const sortedByEngagement = [...posts]
-    .map((post) => ({ post, engagement: getEngagementRate(post) }))
-    .sort((left, right) => right.engagement - left.engagement);
+    .map((post) => ({ post, engagement: getPostPerformanceScore(post, preferViews) }))
+    .sort((left, right) => right.engagement - left.engagement || new Date(right.post.timestamp).getTime() - new Date(left.post.timestamp).getTime());
 
   const cutoffIndex = Math.max(1, Math.ceil(sortedByEngagement.length * 0.2));
   const topPosts = sortedByEngagement.slice(0, cutoffIndex).map(({ post }) => post);
