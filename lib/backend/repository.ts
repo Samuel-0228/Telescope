@@ -121,27 +121,40 @@ class SupabaseRepository implements RepositoryShape {
   }
 
   async findChannelByUsername(username: string): Promise<ChannelRecord | null> {
-    const { data, error } = await this.client
-      .from('channels')
-      .select('id, name, username, category, created_at')
-      .eq('username', username)
-      .maybeSingle();
+    try {
+      const { data, error } = await this.client
+        .from('channels')
+        .select('id, name, username, category, created_at')
+        .eq('username', username)
+        .maybeSingle();
 
-    if (error) {
-      throw new Error(`Failed to find channel: ${error.message}`);
-    }
+      if (error) {
+        // Log error and return null so analysis can continue with collector
+        // instead of failing the entire request due to transient DB/network issues.
+        // Keep the error visible in server logs for debugging.
+        // e.g. error.message may be 'TypeError: fetch failed' when network is down.
+        // eslint-disable-next-line no-console
+        console.error('Supabase findChannelByUsername error:', error.message);
+        return null;
+      }
 
-    if (!data) {
+      if (!data) {
+        return null;
+      }
+
+      return {
+        id: data.id,
+        name: data.name,
+        username: data.username,
+        category: data.category,
+        createdAt: data.created_at,
+      };
+    } catch (err) {
+      // Network or fetch failure: log and return null so collector can proceed.
+      // eslint-disable-next-line no-console
+      console.error('Supabase findChannelByUsername exception:', err);
       return null;
     }
-
-    return {
-      id: data.id,
-      name: data.name,
-      username: data.username,
-      category: data.category,
-      createdAt: data.created_at,
-    };
   }
 
   async listTrackedChannels(limit: number): Promise<ChannelRecord[]> {
