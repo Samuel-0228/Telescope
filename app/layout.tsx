@@ -9,7 +9,7 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: 'TeleScope - Telegram Analytics & Growth Platform',
   description: 'Turn Telegram channel data into actionable growth strategies with advanced analytics and insights',
-  generator: 'v0.app',
+  generator: 'Gebeya Dala',
   icons: {
     icon: [
       {
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
         type: 'image/svg+xml',
       },
     ],
-    apple: '/apple-icon.png',
+    apple: '/favicon.ico',
   },
 }
 
