@@ -297,20 +297,33 @@ class SupabaseRepository implements RepositoryShape {
   }
 
   async refreshLeaderboardFromPosts(limit: number): Promise<boolean> {
-    const { error } = await this.client.rpc('refresh_leaderboard_from_posts', {
-      top_n: limit,
-    });
+    try {
+      const { error } = await this.client.rpc('refresh_leaderboard_from_posts', {
+        top_n: limit,
+      });
 
-    if (error) {
-      // If the function is not installed yet, gracefully fallback to app-level generation.
-      if (error.message.toLowerCase().includes('could not find the function')) {
-        return false;
+      if (error) {
+        const message = error.message.toLowerCase();
+        // Gracefully fallback to app-level generation when DB function is unavailable
+        // or when the RPC fails on leaderboard unique key collisions.
+        if (
+          message.includes('could not find the function') ||
+          (message.includes('duplicate key value') && message.includes('leaderboard_channel_id_key'))
+        ) {
+          return false;
+        }
+
+        throw new Error(`Failed to refresh leaderboard from posts: ${error.message}`);
       }
 
-      throw new Error(`Failed to refresh leaderboard from posts: ${error.message}`);
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message.toLowerCase() : '';
+      if (message.includes('duplicate key value') && message.includes('leaderboard_channel_id_key')) {
+        return false;
+      }
+      throw err;
     }
-
-    return true;
   }
 
   async writeLeaderboard(entries: LeaderboardEntry[]): Promise<void> {
