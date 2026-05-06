@@ -1,9 +1,8 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { ChannelRecord, LeaderboardEntry, PostRecord, TimeRange } from './types';
+import type { ChannelRecord, LeaderboardEntry, PostRecord } from './types';
 
 interface MetricsCacheRecord {
   channelId: string;
-  timeRange: TimeRange;
   payload: unknown;
   refreshedAt: string;
 }
@@ -13,8 +12,9 @@ interface RepositoryShape {
   findChannelByUsername(username: string): Promise<ChannelRecord | null>;
   listTrackedChannels(limit: number): Promise<ChannelRecord[]>;
   upsertPosts(channelId: string, posts: PostRecord[]): Promise<void>;
-  readMetricsCache(channelId: string, timeRange: TimeRange): Promise<MetricsCacheRecord | null>;
-  writeMetricsCache(channelId: string, timeRange: TimeRange, payload: unknown): Promise<void>;
+  getPostsByChannelId(channelId: string): Promise<PostRecord[]>;
+  readMetricsCache(channelId: string): Promise<MetricsCacheRecord | null>;
+  writeMetricsCache(channelId: string, payload: unknown): Promise<void>;
   readLeaderboard(): Promise<LeaderboardEntry[] | null>;
   refreshLeaderboardFromPosts(limit: number): Promise<boolean>;
   writeLeaderboard(entries: LeaderboardEntry[]): Promise<void>;
@@ -46,8 +46,12 @@ class MemoryRepository implements RepositoryShape {
     this.posts.set(channelId, posts);
   }
 
-  async readMetricsCache(channelId: string, timeRange: TimeRange): Promise<MetricsCacheRecord | null> {
-    const key = `${channelId}:${timeRange}`;
+  async getPostsByChannelId(channelId: string): Promise<PostRecord[]> {
+    return this.posts.get(channelId) || [];
+  }
+
+  async readMetricsCache(channelId: string): Promise<MetricsCacheRecord | null> {
+    const key = `${channelId}:all`;
     const cached = this.metricsCache.get(key);
     if (!cached) {
       return null;
@@ -62,10 +66,9 @@ class MemoryRepository implements RepositoryShape {
     return cached;
   }
 
-  async writeMetricsCache(channelId: string, timeRange: TimeRange, payload: unknown): Promise<void> {
-    this.metricsCache.set(`${channelId}:${timeRange}`, {
+  async writeMetricsCache(channelId: string, payload: unknown): Promise<void> {
+    this.metricsCache.set(`${channelId}:all`, {
       channelId,
-      timeRange,
       payload,
       refreshedAt: new Date().toISOString(),
     });
@@ -200,12 +203,37 @@ class SupabaseRepository implements RepositoryShape {
     }
   }
 
-  async readMetricsCache(channelId: string, timeRange: TimeRange): Promise<MetricsCacheRecord | null> {
+  async getPostsByChannelId(channelId: string): Promise<PostRecord[]> {
+    const { data, error } = await this.client
+      .from('posts')
+      .select('id, channel_id, external_post_id, content, media_type, views, reactions, comments, post_timestamp, raw_payload')
+      .eq('channel_id', channelId)
+      .order('post_timestamp', { ascending: false });
+
+    if (error) {
+      throw new Error(`Failed to read posts: ${error.message}`);
+    }
+
+    return (data || []).map((row) => ({
+      id: row.id,
+      channelId: row.channel_id,
+      externalPostId: row.external_post_id,
+      content: row.content || '',
+      mediaType: row.media_type,
+      views: row.views || 0,
+      reactions: row.reactions || 0,
+      comments: row.comments || 0,
+      timestamp: row.post_timestamp,
+      raw: (row.raw_payload || {}) as Record<string, unknown>,
+    }));
+  }
+
+  async readMetricsCache(channelId: string): Promise<MetricsCacheRecord | null> {
     const { data, error } = await this.client
       .from('metrics_cache')
-      .select('channel_id, time_range, payload, refreshed_at')
+      .select('channel_id, payload, refreshed_at')
       .eq('channel_id', channelId)
-      .eq('time_range', timeRange)
+      .eq('time_range', 'all')
       .maybeSingle();
 
     if (error) {
@@ -218,17 +246,16 @@ class SupabaseRepository implements RepositoryShape {
 
     return {
       channelId: data.channel_id,
-      timeRange: data.time_range as TimeRange,
       payload: data.payload,
       refreshedAt: data.refreshed_at,
     };
   }
 
-  async writeMetricsCache(channelId: string, timeRange: TimeRange, payload: unknown): Promise<void> {
+  async writeMetricsCache(channelId: string, payload: unknown): Promise<void> {
     const { error } = await this.client.from('metrics_cache').upsert(
       {
         channel_id: channelId,
-        time_range: timeRange,
+        time_range: 'all',
         payload,
         refreshed_at: new Date().toISOString(),
       },

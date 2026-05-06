@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { compareChannelsSchema, parseTimeRange } from '@/lib/backend/validation';
+import { compareChannelsSchema } from '@/lib/backend/validation';
 import { compareChannels } from '@/lib/backend/service';
 import { errorResponse, json } from '@/lib/backend/http';
 
@@ -14,7 +14,6 @@ export async function POST(request: NextRequest) {
 
   const result = await compareChannels({
     channelReferences: parsed.data.channels,
-    timeRange: parseTimeRange(parsed.data.time_range),
   });
 
   return json(result);

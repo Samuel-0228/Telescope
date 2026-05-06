@@ -3,18 +3,16 @@ import { checkRateLimit } from './rate-limit';
 import { getRepository } from './repository';
 import { getTelegramCollector } from './collector';
 import { generateLeaderboardSeeds } from './mock-data';
-import type { AnalyzedChannelResponse, ChannelMetrics, ComparisonRow, LeaderboardEntry, PostIdea, TimeRange, WeeklyPlanItem } from './types';
-import { extractChannelLabel, normalizeTelegramUsername } from './utils';
+import type { AnalyzedChannelResponse, ChannelMetrics, ComparisonRow, LeaderboardEntry, PostIdea, WeeklyPlanItem } from './types';
+import { normalizeTelegramUsername } from './utils';
 import { generatePostIdeas, generateWeeklyPlan } from './ai';
 
 export interface AnalyzeChannelInput {
   channelReference: string;
-  timeRange: TimeRange;
 }
 
 export interface CompareChannelsInput {
   channelReferences: string[];
-  timeRange: TimeRange;
 }
 
 export interface GeneratedAnalysis extends AnalyzedChannelResponse {
@@ -37,10 +35,10 @@ const resolveChannelCacheKey = async (channelReference: string): Promise<string 
   return existingChannel?.id || null;
 };
 
-const readCacheIfFresh = async (channelId: string | null, timeRange: TimeRange): Promise<AnalyzedChannelResponse | null> => {
+const readCacheIfFresh = async (channelId: string | null): Promise<AnalyzedChannelResponse | null> => {
   if (!channelId) return null;
 
-  const cached = await repository.readMetricsCache(channelId, timeRange);
+  const cached = await repository.readMetricsCache(channelId);
   if (!cached) {
     return null;
   }
@@ -50,7 +48,7 @@ const readCacheIfFresh = async (channelId: string | null, timeRange: TimeRange):
 
 export const analyzeChannel = async (input: AnalyzeChannelInput): Promise<GeneratedAnalysis> => {
   const cacheKey = await resolveChannelCacheKey(input.channelReference);
-  const cached = await readCacheIfFresh(cacheKey, input.timeRange);
+  const cached = await readCacheIfFresh(cacheKey);
   if (cached) {
     return {
       ...cached,
@@ -59,12 +57,13 @@ export const analyzeChannel = async (input: AnalyzeChannelInput): Promise<Genera
     };
   }
 
-  const collection = await collector.collectChannel(input.channelReference, input.timeRange);
+  const collection = await collector.collectChannel(input.channelReference);
   const channel = await repository.upsertChannel(collection.channel);
   await repository.upsertPosts(channel.id, collection.posts);
 
-  const metrics = calculateChannelMetrics(collection.posts, input.timeRange);
-  const patterns = analyzePatterns(collection.posts, metrics);
+  const storedPosts = await repository.getPostsByChannelId(channel.id);
+  const metrics = calculateChannelMetrics(storedPosts);
+  const patterns = analyzePatterns(storedPosts, metrics);
   const growthScore = calculateGrowthScore(metrics, patterns);
 
   const response: AnalyzedChannelResponse = {
@@ -75,22 +74,29 @@ export const analyzeChannel = async (input: AnalyzeChannelInput): Promise<Genera
     strategies: patterns.insights,
   };
 
-  await repository.writeMetricsCache(channel.id, input.timeRange, response);
+  await repository.writeMetricsCache(channel.id, response);
 
-  const scraperFallback = collection.posts.some((p) => (p.raw as any)?.fallback === true);
+  if (!collection.fetchComplete) {
+    // eslint-disable-next-line no-console
+    console.warn(`Partial fetch detected for @${channel.username}: pagination did not reach a terminal page.`);
+  }
+  if (collection.expectedPostCount && storedPosts.length < Math.max(1, Math.floor(collection.expectedPostCount * 0.9))) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `Potential partial fetch for @${channel.username}: stored ${storedPosts.length} posts vs expected approx ${collection.expectedPostCount}.`,
+    );
+  }
 
   return {
     ...response,
     viewsOverTime: metrics.viewsTrend,
     topPosts: metrics.topPosts,
-    // optional flag to indicate scraper used fallback to all-time
-    ...(scraperFallback ? { scraperFallback: true } : {}),
-  } as GeneratedAnalysis & { scraperFallback?: boolean };
+  };
 };
 
 export const compareChannels = async (input: CompareChannelsInput): Promise<{ comparisons: ComparisonRow[]; topPerformers: Record<string, string> }> => {
   const references = input.channelReferences.slice(0, 3);
-  const analyses = await Promise.all(references.map((reference) => analyzeChannel({ channelReference: reference, timeRange: input.timeRange })));
+  const analyses = await Promise.all(references.map((reference) => analyzeChannel({ channelReference: reference })));
 
   const comparisons: ComparisonRow[] = analyses.map((analysis) => ({
     channelId: analysis.channel.id,
@@ -148,7 +154,7 @@ export const refreshLeaderboard = async (): Promise<LeaderboardEntry[]> => {
   const trackedChannels = await repository.listTrackedChannels(topN);
   if (trackedChannels.length) {
     const analyses = await Promise.all(
-      trackedChannels.map((channel) => analyzeChannel({ channelReference: channel.username, timeRange: '30' })),
+      trackedChannels.map((channel) => analyzeChannel({ channelReference: channel.username })),
     );
 
     const leaderboard = buildLeaderboardFromAnalyses(analyses);
@@ -158,7 +164,7 @@ export const refreshLeaderboard = async (): Promise<LeaderboardEntry[]> => {
 
   const seedChannels = generateLeaderboardSeeds();
   const analyses = await Promise.all(
-    seedChannels.map((seed) => analyzeChannel({ channelReference: seed.username, timeRange: '30' })),
+    seedChannels.map((seed) => analyzeChannel({ channelReference: seed.username })),
   );
 
   const leaderboard = buildLeaderboardFromAnalyses(analyses);
@@ -169,7 +175,7 @@ export const refreshLeaderboard = async (): Promise<LeaderboardEntry[]> => {
 export const getLeaderboard = async (): Promise<LeaderboardEntry[]> => refreshLeaderboard();
 
 export const generateIdeas = async (channelReference: string): Promise<{ channel: string; ideas: PostIdea[] }> => {
-  const analysis = await analyzeChannel({ channelReference, timeRange: '30' });
+  const analysis = await analyzeChannel({ channelReference });
   const ideas = await generatePostIdeas(analysis.metrics, analysis.patterns, analysis.channel.category);
   return {
     channel: analysis.channel.username,
@@ -178,7 +184,7 @@ export const generateIdeas = async (channelReference: string): Promise<{ channel
 };
 
 export const generatePlan = async (channelReference: string): Promise<{ channel: string; schedule: WeeklyPlanItem[] }> => {
-  const analysis = await analyzeChannel({ channelReference, timeRange: '30' });
+  const analysis = await analyzeChannel({ channelReference });
   const schedule = await generateWeeklyPlan(analysis.metrics, analysis.patterns, analysis.channel.category);
   return {
     channel: analysis.channel.username,

@@ -1,5 +1,3 @@
-export type TimeRange = '30' | '60' | '90' | 'all';
-
 export type MediaType = 'text' | 'image' | 'video' | 'audio' | 'document' | 'unknown';
 
 export interface ChannelRecord {

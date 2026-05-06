@@ -1,16 +1,18 @@
 import { load } from 'cheerio';
-import type { ChannelRecord, PostRecord, TimeRange } from './types';
+import type { ChannelRecord, PostRecord } from './types';
 import { generateSyntheticChannel, generateSyntheticPosts } from './mock-data';
 import { normalizeTelegramUsername } from './utils';
 
 export interface TelegramCollectionResult {
   channel: ChannelRecord;
   posts: PostRecord[];
+  expectedPostCount: number | null;
+  fetchComplete: boolean;
   source: 'synthetic' | 'bot-api' | 'scraper';
 }
 
 export interface TelegramCollector {
-  collectChannel(channelReference: string, timeRange: TimeRange): Promise<TelegramCollectionResult>;
+  collectChannel(channelReference: string): Promise<TelegramCollectionResult>;
 }
 
 const detectCollectionMode = (): 'synthetic' | 'bot-api' | 'scraper' => {
@@ -29,21 +31,6 @@ const detectCollectionMode = (): 'synthetic' | 'bot-api' | 'scraper' => {
 const buildChannelRecord = (reference: string): ChannelRecord => {
   const username = normalizeTelegramUsername(reference) || 'savvyscope-demo';
   return generateSyntheticChannel(username);
-};
-
-const getTimeRangeStart = (timeRange: TimeRange): Date | null => {
-  if (timeRange === 'all') {
-    return null;
-  }
-
-  const days = Number(timeRange);
-  if (!Number.isFinite(days) || days <= 0) {
-    return null;
-  }
-
-  const start = new Date();
-  start.setUTCDate(start.getUTCDate() - days);
-  return start;
 };
 
 const decodeHtml = (value: string): string =>
@@ -156,7 +143,7 @@ const extractMessageText = ($wrap: any): string => {
   return normalizeText(stripHtml(contentNode.html() || contentNode.text()));
 };
 
-const extractPostsFromHtml = (html: string, channel: ChannelRecord, cutoff: Date | null, fallback = false): PostRecord[] => {
+const extractPostsFromHtml = (html: string, channel: ChannelRecord): PostRecord[] => {
   const $ = load(html);
   const segments = $('div.tgme_widget_message_wrap').toArray();
   const posts: PostRecord[] = [];
@@ -175,10 +162,6 @@ const extractPostsFromHtml = (html: string, channel: ChannelRecord, cutoff: Date
 
     const timestamp = new Date(datetimeValue);
     if (Number.isNaN(timestamp.getTime())) {
-      continue;
-    }
-
-    if (cutoff && timestamp < cutoff) {
       continue;
     }
 
@@ -214,7 +197,6 @@ const extractPostsFromHtml = (html: string, channel: ChannelRecord, cutoff: Date
       timestamp: timestamp.toISOString(),
       raw: {
         source: 'scraper',
-        fallback,
         extracted: {
           hasViews: views > 0,
           hasComments: comments > 0,
@@ -235,48 +217,56 @@ const extractPostsFromHtml = (html: string, channel: ChannelRecord, cutoff: Date
 };
 
 class SyntheticTelegramCollector implements TelegramCollector {
-  async collectChannel(channelReference: string, timeRange: TimeRange): Promise<TelegramCollectionResult> {
+  async collectChannel(channelReference: string): Promise<TelegramCollectionResult> {
     const channel = buildChannelRecord(channelReference);
-    const posts = generateSyntheticPosts(channel.username, timeRange);
+    const posts = generateSyntheticPosts(channel.username);
 
     return {
       channel,
       posts,
+      expectedPostCount: posts.length,
+      fetchComplete: true,
       source: 'synthetic',
     };
   }
 }
 
 class BotApiTelegramCollector extends SyntheticTelegramCollector {
-  async collectChannel(channelReference: string, timeRange: TimeRange): Promise<TelegramCollectionResult> {
-    return super.collectChannel(channelReference, timeRange);
+  async collectChannel(channelReference: string): Promise<TelegramCollectionResult> {
+    return super.collectChannel(channelReference);
   }
 }
 
 class ScraperTelegramCollector extends SyntheticTelegramCollector {
-  async collectChannel(channelReference: string, timeRange: TimeRange): Promise<TelegramCollectionResult> {
+  async collectChannel(channelReference: string): Promise<TelegramCollectionResult> {
     const username = normalizeTelegramUsername(channelReference);
     if (!username) {
       throw new Error('Please enter a valid public Telegram channel username or URL.');
     }
 
-    const url = `https://t.me/s/${encodeURIComponent(username)}`;
+    const baseUrl = `https://t.me/s/${encodeURIComponent(username)}`;
 
     try {
-      const res = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (SavvyScope)',
-          Accept: 'text/html,application/xhtml+xml',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Cache-Control': 'no-cache',
-        },
-      });
+      const fetchPage = async (before?: number): Promise<string> => {
+        const pageUrl = before ? `${baseUrl}?before=${before}` : baseUrl;
+        const pageRes = await fetch(pageUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (SavvyScope)',
+            Accept: 'text/html,application/xhtml+xml',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Cache-Control': 'no-cache',
+          },
+        });
 
-      if (!res.ok) {
-        throw new Error(`Telegram channel fetch failed with status ${res.status}. Ensure the channel is public.`);
-      }
+        if (!pageRes.ok) {
+          throw new Error(`Telegram channel fetch failed with status ${pageRes.status}. Ensure the channel is public.`);
+        }
 
-      const html = await res.text();
+        return pageRes.text();
+      };
+
+      const html = await fetchPage();
+
       const channel: ChannelRecord = {
         id: `scrape_${username}`,
         name: extractChannelName(html, username),
@@ -285,25 +275,56 @@ class ScraperTelegramCollector extends SyntheticTelegramCollector {
         createdAt: new Date().toISOString(),
       };
 
-      const cutoff = getTimeRangeStart(timeRange);
-      const posts = extractPostsFromHtml(html, channel, cutoff, false);
+      const deduped = new Map<string, PostRecord>();
+      let oldestMessageId: number | null = null;
+      let expectedPostCount: number | null = null;
+      let fetchComplete = false;
 
-      if (!posts.length) {
-        const fallbackPosts = extractPostsFromHtml(html, channel, null, true);
-        if (fallbackPosts.length) {
-          return {
-            channel,
-            posts: fallbackPosts,
-            source: 'scraper',
-          };
+      for (let pageIndex = 0; pageIndex < 300; pageIndex += 1) {
+        const pageHtml = pageIndex === 0 ? html : await fetchPage(oldestMessageId || undefined);
+        const pagePosts = extractPostsFromHtml(pageHtml, channel);
+        if (!pagePosts.length) {
+          fetchComplete = true;
+          break;
         }
 
+        pagePosts.forEach((post) => {
+          deduped.set(post.externalPostId, post);
+        });
+
+        const ids = pagePosts
+          .map((post) => {
+            const idPart = post.externalPostId.split('_').at(-1);
+            return Number(idPart);
+          })
+          .filter((value) => Number.isFinite(value));
+
+        const maxId = ids.length ? Math.max(...ids) : null;
+        const minId = ids.length ? Math.min(...ids) : null;
+        if (maxId && (!expectedPostCount || maxId > expectedPostCount)) {
+          expectedPostCount = maxId;
+        }
+
+        if (!minId || minId <= 1 || minId === oldestMessageId) {
+          fetchComplete = true;
+          break;
+        }
+        oldestMessageId = minId;
+      }
+
+      const posts = Array.from(deduped.values()).sort(
+        (left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime(),
+      );
+
+      if (!posts.length) {
         throw new Error('No public posts found for this channel. It may be private, empty, or Telegram changed the page structure.');
       }
 
       return {
         channel,
         posts,
+        expectedPostCount,
+        fetchComplete,
         source: 'scraper',
       };
     } catch (err) {

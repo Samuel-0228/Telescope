@@ -7,13 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { TrendingUp, BarChart3, Users, Zap, Trophy, Calendar, Sparkles, Share2, ArrowRight, Gauge } from 'lucide-react';
 
 export default function ThreeFortyEight() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [timeFilter, setTimeFilter] = useState('30');
   const [channelLink, setChannelLink] = useState('');
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const [theme, setTheme] = useState<'red' | 'grey'>('red');
@@ -58,7 +56,6 @@ export default function ThreeFortyEight() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           channel_url: channelLink,
-          time_range: timeFilter,
         }),
       });
 
@@ -69,10 +66,6 @@ export default function ThreeFortyEight() {
       
       const data = await response.json();
 
-      if (data.scraper_fallback) {
-        setNotice('No posts were found in the selected range, so the dashboard is showing all available public posts instead.');
-      }
-      
       setChannelMetrics(data.metrics);
       setViewsOverTimeData(data.views_over_time || []);
       setTopPosts(data.top_posts || []);
@@ -217,19 +210,9 @@ export default function ThreeFortyEight() {
                           className="w-full text-sm font-mono bg-background border-border text-foreground placeholder:text-muted-foreground"
                           disabled={loading}
                         />
-                        <div className="mt-2 sm:mt-3 w-48">
-                          <Select value={timeFilter} onValueChange={(value) => setTimeFilter(value)}>
-                            <SelectTrigger className="w-full text-xs font-mono uppercase tracking-wide bg-card border-border">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="bg-card border-border">
-                              <SelectItem value="30" className="font-mono text-xs">Last 30 days</SelectItem>
-                              <SelectItem value="60" className="font-mono text-xs">Last 60 days</SelectItem>
-                              <SelectItem value="90" className="font-mono text-xs">Last 90 days</SelectItem>
-                              <SelectItem value="all" className="font-mono text-xs">Overall</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        <p className="mt-2 sm:mt-3 text-xs text-muted-foreground font-mono uppercase tracking-wide">
+                          Full channel history analysis
+                        </p>
                       </div>
                       <Button 
                         className="w-full sm:w-auto font-mono uppercase tracking-wide text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-all disabled:opacity-50"
@@ -245,24 +228,7 @@ export default function ThreeFortyEight() {
                 {/* Time Filter and Key Metrics */}
                 {channelMetrics ? (
                 <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <h3 className="text-sm font-mono uppercase tracking-wider font-semibold">Key Metrics</h3>
-                    <Select value={timeFilter} onValueChange={(value) => {
-                      setTimeFilter(value);
-                      setChannelLink('');
-                      setChannelMetrics(null);
-                    }}>
-                      <SelectTrigger className="w-full sm:w-40 text-xs font-mono uppercase tracking-wide bg-card border-border">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-card border-border">
-                        <SelectItem value="30" className="font-mono text-xs">Last 30 days</SelectItem>
-                        <SelectItem value="60" className="font-mono text-xs">Last 60 days</SelectItem>
-                        <SelectItem value="90" className="font-mono text-xs">Last 90 days</SelectItem>
-                        <SelectItem value="all" className="font-mono text-xs">Overall</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <h3 className="text-sm font-mono uppercase tracking-wider font-semibold">Key Metrics (Lifetime)</h3>
 
                   {/* Metrics Grid - Interactive */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -461,7 +427,7 @@ export default function ThreeFortyEight() {
                     {
                       icon: TrendingUp,
                       title: 'CHANNEL COMPARISON',
-                      desc: 'Place multiple channels side by side and visually compare views, engagement, and posting cadence across any time window.',
+                      desc: 'Place multiple channels side by side and visually compare views, engagement, and posting cadence across full history.',
                       tag: 'COMPARE',
                     },
                     {
@@ -518,7 +484,7 @@ export default function ThreeFortyEight() {
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div>
-                          <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Total Views (30d)</p>
+                          <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Total Views (Lifetime)</p>
                           <p className="text-3xl font-mono font-bold text-foreground mt-1">285K</p>
                         </div>
                         <div>
@@ -578,7 +544,7 @@ export default function ThreeFortyEight() {
                   <h2 className="text-2xl sm:text-4xl font-mono font-bold text-foreground">
                     <span className="text-primary">TOP 10</span> CHANNELS
                   </h2>
-                  <p className="text-sm text-muted-foreground font-mono">Ranked by engagement rate (Last 30 days)</p>
+                  <p className="text-sm text-muted-foreground font-mono">Ranked by lifetime engagement rate</p>
                 </div>
 
                 {loading ? (

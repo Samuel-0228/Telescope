@@ -1,10 +1,4 @@
-import type { MediaType, TimeRange } from './types';
-
-export const TIME_RANGE_TO_DAYS: Record<Exclude<TimeRange, 'all'>, number> = {
-  '30': 30,
-  '60': 60,
-  '90': 90,
-};
+import type { MediaType } from './types';
 
 export const DEFAULT_HISTORY_DAYS = 180;
 

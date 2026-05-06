@@ -1,5 +1,5 @@
 import { DAY_NAMES, clamp, differenceInDaysUtc, formatDateKey, roundTo, toPercent } from './utils';
-import type { ChannelMetrics, MediaType, PatternAnalysis, PatternInsight, PostRecord, TimeRange } from './types';
+import type { ChannelMetrics, MediaType, PatternAnalysis, PatternInsight, PostRecord } from './types';
 
 const EMPTY_MEDIA_ROWS: Array<{ name: MediaType; count: number; totalViews: number; totalEngagement: number }> = [
   { name: 'text', count: 0, totalViews: 0, totalEngagement: 0 },
@@ -119,7 +119,7 @@ const calculateBestDayAndHour = (posts: PostRecord[], preferViews: boolean): { b
   };
 };
 
-export const calculateChannelMetrics = (posts: PostRecord[], _timeRange: TimeRange): ChannelMetrics => {
+export const calculateChannelMetrics = (posts: PostRecord[]): ChannelMetrics => {
   const orderedPosts = [...posts].sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
   const totalViews = orderedPosts.reduce((sum, post) => sum + post.views, 0);
   const totalEngagement = orderedPosts.reduce((sum, post) => sum + post.reactions + post.comments, 0);

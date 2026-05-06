@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { analyzeChannelSchema, parseTimeRange } from '@/lib/backend/validation';
+import { analyzeChannelSchema } from '@/lib/backend/validation';
 import { analyzeChannel, getRateLimitStatus } from '@/lib/backend/service';
 import { errorResponse, getIpAddress, json } from '@/lib/backend/http';
 
@@ -21,7 +21,6 @@ export async function POST(request: NextRequest) {
 
     const result = await analyzeChannel({
       channelReference: parsed.data.channel_url,
-      timeRange: parseTimeRange(parsed.data.time_range),
     });
 
     return json({
@@ -49,7 +48,6 @@ export async function POST(request: NextRequest) {
       strategies: result.strategies,
       growth_score: result.growthScore,
       patterns: result.patterns,
-      scraper_fallback: (result as any).scraperFallback || false,
     });
   } catch (error) {
     return errorResponse(error instanceof Error ? error.message : 'Failed to analyze channel', 500);

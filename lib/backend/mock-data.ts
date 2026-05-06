@@ -1,5 +1,5 @@
 import { CATEGORY_POOL, DEFAULT_HISTORY_DAYS, DAY_NAMES, MEDIA_TYPES, hashSeed, seededRandom } from './utils';
-import type { ChannelRecord, MediaType, PostRecord, TimeRange } from './types';
+import type { ChannelRecord, MediaType, PostRecord } from './types';
 
 interface SyntheticProfile {
   id: string;
@@ -128,11 +128,11 @@ export const generateSyntheticChannel = (usernameInput: string): ChannelRecord =
   };
 };
 
-export const generateSyntheticPosts = (usernameInput: string, timeRange: TimeRange): PostRecord[] => {
+export const generateSyntheticPosts = (usernameInput: string): PostRecord[] => {
   const username = usernameInput || 'savvyscope-demo';
   const profile = buildProfile(username);
   const seed = hashSeed(username);
-  const historyDays = timeRange === 'all' ? DEFAULT_HISTORY_DAYS : Number(timeRange);
+  const historyDays = DEFAULT_HISTORY_DAYS;
   const targetPosts = Math.max(24, Math.round(historyDays * profile.dailyCadence));
   const posts: PostRecord[] = [];
 
