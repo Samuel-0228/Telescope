@@ -38,22 +38,27 @@ const leaderboard = [
   { rank: 5, name: 'Startup Stories', engagement: 9.8, views: 155000, category: 'BUSINESS' },
 ];
 
-const COLORS = ['#00a8ff', '#00d9ff', '#0099dd', '#00ff88', '#ffaa00'];
-
 export default function SavvyScope() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [timeFilter, setTimeFilter] = useState('30');
   const [channelLink, setChannelLink] = useState('');
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+  const [theme, setTheme] = useState<'red' | 'grey'>('red');
 
   const growthScore = 78;
 
+  const COLORS = theme === 'red' 
+    ? ['#ff3333', '#ff6666', '#dd2222', '#00ff88', '#ffaa00']
+    : ['#808080', '#a0a0a0', '#606060', '#00ff88', '#ffaa00'];
+
+  const primaryColor = theme === 'red' ? '#ff3333' : '#808080';
+
   return (
     <SidebarProvider>
-      <div className="flex w-full min-h-screen bg-background overflow-hidden">
+      <div className="flex w-full min-h-screen bg-background overflow-hidden" data-theme={theme}>
         {/* Sidebar */}
         <Sidebar className="border-r border-border hidden lg:block">
-          <SidebarHeader className="border-b border-border p-4 space-y-2">
+          <SidebarHeader className="border-b border-border p-4 space-y-3">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded border-2 border-primary flex items-center justify-center text-primary font-mono font-bold text-sm">
                 S
@@ -61,6 +66,12 @@ export default function SavvyScope() {
               <h1 className="text-lg font-mono font-bold text-foreground">SavvyScope</h1>
             </div>
             <p className="text-xs text-muted-foreground font-mono">TELEGRAM ANALYTICS</p>
+            <button
+              onClick={() => setTheme(theme === 'red' ? 'grey' : 'red')}
+              className="w-full px-3 py-2 text-xs font-mono uppercase tracking-wide border border-primary bg-background hover:bg-primary/10 text-primary transition-colors rounded"
+            >
+              Theme: {theme === 'red' ? 'Red' : 'Grey'}
+            </button>
           </SidebarHeader>
           <SidebarContent>
             <SidebarMenu>
@@ -95,7 +106,15 @@ export default function SavvyScope() {
               </div>
               <h1 className="text-base font-mono font-bold text-foreground">SavvyScope</h1>
             </div>
-            <SidebarTrigger />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setTheme(theme === 'red' ? 'grey' : 'red')}
+                className="px-3 py-1 text-xs font-mono uppercase tracking-wide border border-primary bg-background hover:bg-primary/10 text-primary transition-colors rounded"
+              >
+                {theme === 'red' ? 'Grey' : 'Red'}
+              </button>
+              <SidebarTrigger />
+            </div>
           </div>
 
           <div className="p-4 sm:p-6 max-w-7xl mx-auto w-full">
@@ -224,7 +243,7 @@ export default function SavvyScope() {
                             contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #1a1a1a' }}
                             labelStyle={{ color: '#ffffff' }}
                           />
-                          <Line type="monotone" dataKey="views" stroke="#00a8ff" strokeWidth={2} dot={{ fill: '#00a8ff' }} />
+                          <Line type="monotone" dataKey="views" stroke={primaryColor} strokeWidth={2} dot={{ fill: primaryColor }} />
                         </LineChart>
                       </ResponsiveContainer>
                     </CardContent>
@@ -252,7 +271,7 @@ export default function SavvyScope() {
                             labelLine={false}
                             label={({ name, value }) => `${name} ${value}%`}
                             outerRadius={80}
-                            fill="#00a8ff"
+                            fill={primaryColor}
                             dataKey="value"
                           >
                             {COLORS.map((color, index) => (
@@ -377,9 +396,9 @@ export default function SavvyScope() {
                         <YAxis tick={{ fontSize: 12, fill: '#808080' }} />
                         <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #1a1a1a' }} />
                         <Legend wrapperStyle={{ color: '#808080' }} />
-                        <Bar dataKey="Tech Daily" fill="#00a8ff" />
-                        <Bar dataKey="Growth Hacker" fill="#00d9ff" />
-                        <Bar dataKey="Dev Tips" fill="#0099dd" />
+                        <Bar dataKey="Tech Daily" fill={COLORS[0]} />
+                        <Bar dataKey="Growth Hacker" fill={COLORS[1]} />
+                        <Bar dataKey="Dev Tips" fill={COLORS[2]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -498,19 +517,26 @@ export default function SavvyScope() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {[
-                    { title: 'OPTIMAL POST TIME', desc: 'Post between 10 AM - 2 PM for maximum engagement', icon: '⏰' },
-                    { title: 'CONTENT MIX', desc: 'Increase tutorials from 25% to 35% of content', icon: '📊' },
-                    { title: 'POSTING FREQUENCY', desc: 'Increase to 4 posts/day for better reach', icon: '🚀' },
-                    { title: 'ENGAGEMENT FOCUS', desc: 'Ask questions in 60% of posts to boost interaction', icon: '💬' },
+                    { title: 'OPTIMAL POST TIME', desc: 'Post between 10 AM - 2 PM for maximum engagement' },
+                    { title: 'CONTENT MIX', desc: 'Increase tutorials from 25% to 35% of content' },
+                    { title: 'POSTING FREQUENCY', desc: 'Increase to 4 posts/day for better reach' },
+                    { title: 'ENGAGEMENT FOCUS', desc: 'Ask questions in 60% of posts to boost interaction' },
                   ].map((strategy, idx) => (
                     <Card 
                       key={idx} 
-                      className="border border-border bg-card/50 hover:border-primary/50 transition-all cursor-pointer group"
+                      className="border border-border bg-card/50 hover:border-primary/50 transition-all cursor-pointer group relative overflow-hidden"
                     >
-                      <CardContent className="pt-4 pb-4">
+                      <div className="absolute top-0 left-0 w-1 h-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <CardContent className="pt-4 pb-4 pl-4">
                         <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xl">{strategy.icon}</span>
+                          <div className="flex items-center gap-3">
+                            <div className="relative w-5 h-5 flex items-center justify-center">
+                              <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(0 20%, 0 0, 20% 0, 20% 20%, 0 20%)'}} />
+                              <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(80% 0, 100% 0, 100% 20%, 80% 20%, 80% 0)'}} />
+                              <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(0 80%, 0 100%, 20% 100%, 20% 80%, 0 80%)'}} />
+                              <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(100% 100%, 100% 80%, 80% 80%, 80% 100%, 100% 100%)'}} />
+                              <div className="w-1 h-1 bg-primary rounded-full" />
+                            </div>
                             <p className="font-mono font-bold text-sm text-foreground uppercase tracking-wider">{strategy.title}</p>
                           </div>
                           <p className="text-xs text-muted-foreground font-mono">{strategy.desc}</p>
