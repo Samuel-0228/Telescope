@@ -343,7 +343,9 @@ class SupabaseRepository implements RepositoryShape {
       throw new Error(`Failed to upsert leaderboard channels: ${channelError.message}`);
     }
 
-    const { error: clearError } = await this.client.from('leaderboard').delete();
+    // Supabase/PostgREST safety requires a WHERE clause on DELETE.
+    // leaderboard.rank is always positive, so this clears all rows safely.
+    const { error: clearError } = await this.client.from('leaderboard').delete().gt('rank', 0);
     if (clearError) {
       throw new Error(`Failed to clear leaderboard: ${clearError.message}`);
     }
