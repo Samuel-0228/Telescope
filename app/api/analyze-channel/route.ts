@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
       strategies: result.strategies,
       growth_score: result.growthScore,
       patterns: result.patterns,
+      scraper_fallback: (result as any).scraperFallback || false,
     });
   } catch (error) {
     return errorResponse(error instanceof Error ? error.message : 'Failed to analyze channel', 500);

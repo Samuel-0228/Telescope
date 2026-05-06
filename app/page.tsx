@@ -61,6 +61,10 @@ export default function SavvyScope() {
       }
       
       const data = await response.json();
+
+      if (data.scraper_fallback) {
+        setError('No posts found in the selected range — showing all-time data.');
+      }
       
       setChannelMetrics(data.metrics);
       setViewsOverTimeData(data.views_over_time || []);
@@ -81,7 +85,10 @@ export default function SavvyScope() {
     setLoading(true);
     try {
       const response = await fetch('/api/leaderboard');
-      if (!response.ok) throw new Error('Failed to fetch leaderboard');
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        throw new Error(errorPayload?.error || 'Failed to fetch leaderboard');
+      }
       const data = await response.json();
       setLeaderboard(data.leaderboard || []);
     } catch (err) {

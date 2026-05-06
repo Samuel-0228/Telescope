@@ -77,11 +77,15 @@ export const analyzeChannel = async (input: AnalyzeChannelInput): Promise<Genera
 
   await repository.writeMetricsCache(channel.id, input.timeRange, response);
 
+  const scraperFallback = collection.posts.some((p) => (p.raw as any)?.fallback === true);
+
   return {
     ...response,
     viewsOverTime: metrics.viewsTrend,
     topPosts: metrics.topPosts,
-  };
+    // optional flag to indicate scraper used fallback to all-time
+    ...(scraperFallback ? { scraperFallback: true } : {}),
+  } as GeneratedAnalysis & { scraperFallback?: boolean };
 };
 
 export const compareChannels = async (input: CompareChannelsInput): Promise<{ comparisons: ComparisonRow[]; topPerformers: Record<string, string> }> => {
