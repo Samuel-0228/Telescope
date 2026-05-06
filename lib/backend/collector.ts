@@ -112,12 +112,25 @@ const extractExternalPostPath = ($: any, $wrap: any, username: string): string |
   }
 
   const linkHref = $wrap
-    .find('a[href^="https://t.me/"]')
+    .find('a[href]')
     .toArray()
     .map((element) => $(element).attr('href') || '')
-    .find((href) => href.includes(`https://t.me/${username}/`) && /\/\d+(?:\?|#|$)/.test(href));
+    .find((href) => {
+      const normalizedHref = href.trim();
+      if (!normalizedHref) return false;
+      return (
+        new RegExp(`(?:https?:\\/\\/t\\.me\\/)?(?:s\\/)?${username}\\/\\d+(?:\\?|#|$)`, 'i').test(normalizedHref) ||
+        new RegExp(`^\\/(?:s\\/)?${username}\\/\\d+(?:\\?|#|$)`, 'i').test(normalizedHref)
+      );
+    });
 
-  const hrefMatch = linkHref?.match(/https:\/\/t\.me\/([^/?#]+\/\d+)/i);
+  if (!linkHref) {
+    return null;
+  }
+
+  const hrefMatch =
+    linkHref.match(/(?:https?:\/\/t\.me\/)?(?:s\/)?([^/?#]+\/\d+)/i) ||
+    linkHref.match(/^\/(?:s\/)?([^/?#]+\/\d+)/i);
   return hrefMatch?.[1] || null;
 };
 

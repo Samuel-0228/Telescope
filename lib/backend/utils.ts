@@ -79,6 +79,11 @@ export const normalizeTelegramUsername = (value: string): string => {
     candidate = parts[1];
   }
 
+  // Handle direct post links like t.me/<username>/<post_id>
+  if (first !== 's' && parts.length >= 2 && /^\d+$/.test(parts[1])) {
+    candidate = parts[0];
+  }
+
   // Ignore invite/private-style links that are not usernames.
   if (candidate.startsWith('+') || candidate.toLowerCase() === 'joinchat') {
     return '';
