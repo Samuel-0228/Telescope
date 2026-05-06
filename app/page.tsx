@@ -242,67 +242,6 @@ export default function ThreeFortyEight() {
                   </CardContent>
                 </Card>
 
-                {/* Features / About Section */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {[
-                    {
-                      icon: BarChart3,
-                      title: 'DEEP ANALYTICS',
-                      desc: 'Unpack every metric that matters — views, reach, engagement rate, posting frequency, and content-type performance — all in one unified dashboard.',
-                      tag: 'CORE',
-                    },
-                    {
-                      icon: Sparkles,
-                      title: 'AI GROWTH STRATEGIES',
-                      desc: 'After each analysis, 3:48 generates tailored, actionable strategies based on your channel\'s actual data — not generic advice.',
-                      tag: 'INTELLIGENCE',
-                    },
-                    {
-                      icon: Trophy,
-                      title: 'LIVE LEADERBOARD',
-                      desc: 'See how the top 10 Telegram channels are performing right now. Benchmark your channel against the best in the ecosystem.',
-                      tag: 'RANKINGS',
-                    },
-                    {
-                      icon: TrendingUp,
-                      title: 'CHANNEL COMPARISON',
-                      desc: 'Place multiple channels side by side and visually compare views, engagement, and posting cadence across any time window.',
-                      tag: 'COMPARE',
-                    },
-                    {
-                      icon: Zap,
-                      title: 'PEAK TIMING INSIGHTS',
-                      desc: 'Know exactly which day and hour your audience is most active, so every post lands at maximum impact.',
-                      tag: 'TIMING',
-                    },
-                    {
-                      icon: Calendar,
-                      title: 'WHY 3:48?',
-                      desc: 'Built for Telegram creators who take their craft seriously. 3:48 cuts through noise — giving you the signal you need to grow with precision and speed.',
-                      tag: 'MISSION',
-                    },
-                  ].map(({ icon: Icon, title, desc, tag }, idx) => (
-                    <div
-                      key={idx}
-                      className="group relative border border-border bg-card/40 hover:bg-card/80 hover:border-primary/40 rounded-lg p-4 transition-all duration-200 overflow-hidden cursor-default"
-                    >
-                      {/* corner accents */}
-                      <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                      <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                      <div className="flex items-start gap-3 mb-3">
-                        <div className="mt-0.5 p-1.5 border border-border group-hover:border-primary/50 rounded transition-colors">
-                          <Icon className="w-3.5 h-3.5 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-mono font-bold text-xs text-foreground uppercase tracking-wider">{title}</p>
-                          <span className="inline-block mt-1 px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wider border border-primary/30 text-primary/70 rounded">{tag}</span>
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground font-mono leading-relaxed">{desc}</p>
-                    </div>
-                  ))}
-                </div>
-
                 {/* Time Filter and Key Metrics */}
                 {channelMetrics ? (
                 <div className="space-y-4">
@@ -497,6 +436,67 @@ export default function ThreeFortyEight() {
                 )}
                 </>
                 )}
+
+                {/* Features / About Section */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[
+                    {
+                      icon: BarChart3,
+                      title: 'DEEP ANALYTICS',
+                      desc: 'Unpack every metric that matters — views, reach, engagement rate, posting frequency, and content-type performance — all in one unified dashboard.',
+                      tag: 'CORE',
+                    },
+                    {
+                      icon: Sparkles,
+                      title: 'AI GROWTH STRATEGIES',
+                      desc: 'After each analysis, 3:48 generates tailored, actionable strategies based on your channel\'s actual data — not generic advice.',
+                      tag: 'INTELLIGENCE',
+                    },
+                    {
+                      icon: Trophy,
+                      title: 'LIVE LEADERBOARD',
+                      desc: 'See how the top 10 Telegram channels are performing right now. Benchmark your channel against the best in the ecosystem.',
+                      tag: 'RANKINGS',
+                    },
+                    {
+                      icon: TrendingUp,
+                      title: 'CHANNEL COMPARISON',
+                      desc: 'Place multiple channels side by side and visually compare views, engagement, and posting cadence across any time window.',
+                      tag: 'COMPARE',
+                    },
+                    {
+                      icon: Zap,
+                      title: 'PEAK TIMING INSIGHTS',
+                      desc: 'Know exactly which day and hour your audience is most active, so every post lands at maximum impact.',
+                      tag: 'TIMING',
+                    },
+                    {
+                      icon: Calendar,
+                      title: 'WHY 3:48?',
+                      desc: 'Built for Telegram creators who take their craft seriously. 3:48 cuts through noise — giving you the signal you need to grow with precision and speed.',
+                      tag: 'MISSION',
+                    },
+                  ].map(({ icon: Icon, title, desc, tag }, idx) => (
+                    <div
+                      key={idx}
+                      className="group relative border border-border bg-card/40 hover:bg-card/80 hover:border-primary/40 rounded-lg p-4 transition-all duration-200 overflow-hidden cursor-default"
+                    >
+                      {/* corner accents */}
+                      <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className="mt-0.5 p-1.5 border border-border group-hover:border-primary/50 rounded transition-colors">
+                          <Icon className="w-3.5 h-3.5 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-mono font-bold text-xs text-foreground uppercase tracking-wider">{title}</p>
+                          <span className="inline-block mt-1 px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wider border border-primary/30 text-primary/70 rounded">{tag}</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground font-mono leading-relaxed">{desc}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
