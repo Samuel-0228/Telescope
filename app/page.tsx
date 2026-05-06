@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,9 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
-import { TrendingUp, BarChart3, Users, Zap, Trophy, Calendar, Sparkles, Share2, ArrowRight, Gauge } from 'lucide-react';
+import { TrendingUp, BarChart3, Users, Zap, Trophy, Calendar, Sparkles, Share2, ArrowRight, Gauge, Bot, User, Loader2 } from 'lucide-react';
 
 export default function ThreeFortyEight() {
+  const [channelInfo, setChannelInfo] = useState<{ id: string; username: string } | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [channelLink, setChannelLink] = useState('');
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
@@ -34,6 +35,12 @@ export default function ThreeFortyEight() {
   const [selectedStrategy, setSelectedStrategy] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [strategyQuestion, setStrategyQuestion] = useState('');
+  const [strategyChatLoading, setStrategyChatLoading] = useState(false);
+  const [strategyChatError, setStrategyChatError] = useState<string | null>(null);
+  const [strategySuggestions, setStrategySuggestions] = useState<string[]>([]);
+  const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const strategyChatScrollRef = useRef<HTMLDivElement | null>(null);
 
   const openStrategyDetail = (strategy: any) => {
     setSelectedStrategy(strategy);
@@ -72,12 +79,17 @@ export default function ThreeFortyEight() {
       
       const data = await response.json();
 
+      setChannelInfo(data.channel ? { id: data.channel.id, username: data.channel.username } : null);
       setChannelMetrics(data.metrics);
       setViewsOverTimeData(data.views_over_time || []);
       setTopPosts(data.top_posts || []);
       setContentTypePerformance(data.content_type_performance || []);
       setStrategies(data.strategies || []);
       setGrowthScore(data.growth_score || 0);
+      setChatMessages([]);
+      setStrategySuggestions([]);
+      setStrategyQuestion('');
+      setStrategyChatError(null);
       setActiveTab('dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -140,6 +152,63 @@ export default function ThreeFortyEight() {
   useEffect(() => {
     fetchLeaderboard();
   }, []);
+
+  useEffect(() => {
+    if (strategyChatScrollRef.current) {
+      strategyChatScrollRef.current.scrollTop = strategyChatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages, strategyChatLoading]);
+
+  const sendStrategyQuestion = async (questionOverride?: string) => {
+    const question = (questionOverride || strategyQuestion).trim();
+    if (!question) {
+      setStrategyChatError('Please enter a question first');
+      return;
+    }
+    if (!channelMetrics || !channelInfo) {
+      setStrategyChatError('Analyze your channel first to get personalized strategy insights.');
+      return;
+    }
+
+    setStrategyChatLoading(true);
+    setStrategyChatError(null);
+    const nextUserMessage = { role: 'user' as const, content: question };
+    const nextMessages = [...chatMessages, nextUserMessage];
+    setChatMessages(nextMessages);
+    setStrategyQuestion('');
+
+    try {
+      const history = nextMessages.slice(-5).map((message) => ({
+        role: message.role,
+        content: message.content.slice(0, 500),
+      }));
+
+      const response = await fetch('/api/chat-strategy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel_id: channelInfo.id,
+          channel_url: channelInfo.username,
+          user_question: question,
+          history,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || 'Failed to generate strategy answer');
+      }
+
+      const data = await response.json();
+      setChatMessages((prev) => [...prev, { role: 'assistant', content: data.answer || 'No answer returned' }]);
+      setStrategySuggestions(Array.isArray(data.suggestions) ? data.suggestions : []);
+    } catch (err) {
+      setStrategyChatError(err instanceof Error ? err.message : 'An error occurred');
+      setChatMessages((prev) => [...prev, { role: 'assistant', content: 'Analyze your channel first to get personalized strategy insights.' }]);
+    } finally {
+      setStrategyChatLoading(false);
+    }
+  };
 
   return (
     <SidebarProvider>
@@ -761,6 +830,146 @@ export default function ThreeFortyEight() {
                         <div className="absolute inset-2 rounded-full border border-primary/60 opacity-60" />
                         <div className="absolute inset-6 rounded-full border border-primary/30 opacity-40" />
                       </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border border-border bg-card/50">
+                  <CardHeader>
+                    <CardTitle className="text-xs font-mono uppercase tracking-wide flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-primary" />
+                      STRATEGY CHATBOT
+                    </CardTitle>
+                    <CardDescription className="font-mono text-xs">
+                      Ask data-driven growth questions powered by your channel analytics.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {strategyChatError && (
+                      <div className="p-3 bg-destructive/10 border border-destructive/50 rounded text-sm text-destructive font-mono">
+                        {strategyChatError}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {['Best posting time?', 'Improve engagement', 'Content ideas'].map((prompt) => (
+                        <Button
+                          key={prompt}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="font-mono text-[11px] uppercase tracking-wider"
+                          onClick={() => sendStrategyQuestion(prompt)}
+                          disabled={strategyChatLoading}
+                        >
+                          {prompt}
+                        </Button>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="font-mono text-[11px] uppercase tracking-wider border-primary/50 text-primary"
+                        onClick={() => sendStrategyQuestion('Generate a weekly posting plan for the next 7 days')}
+                        disabled={strategyChatLoading}
+                      >
+                        Generate Weekly Plan
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      {[
+                        { label: 'TOTAL VIEWS', value: channelMetrics.total_views?.toLocaleString() || '0', question: 'Explain what my total views trend means and what I should do next.' },
+                        { label: 'AVG VIEWS/POST', value: Math.round(channelMetrics.avg_views_per_post || 0).toLocaleString(), question: 'Explain my average views per post and how to improve it.' },
+                        { label: 'ENGAGEMENT', value: `${(channelMetrics.engagement_rate || 0).toFixed(1)}%`, question: 'Explain my engagement rate and how to increase it.' },
+                        { label: 'POSTING FREQUENCY', value: `${(channelMetrics.posting_frequency || 0).toFixed(2)}/day`, question: 'Explain my posting frequency and whether I should adjust it.' },
+                      ].map((metric) => (
+                        <button
+                          key={metric.label}
+                          type="button"
+                          onClick={() => sendStrategyQuestion(metric.question)}
+                          disabled={strategyChatLoading}
+                          className="text-left rounded border border-border bg-background/50 p-3 hover:border-primary/50 transition-colors disabled:opacity-60"
+                        >
+                          <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{metric.label}</p>
+                          <p className="text-sm font-mono font-bold text-foreground mt-1">{metric.value}</p>
+                          <p className="text-[10px] font-mono text-primary mt-2">Explain this insight</p>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div ref={strategyChatScrollRef} className="max-h-72 overflow-y-auto border border-border rounded bg-background/60 p-3 space-y-3">
+                      {chatMessages.length === 0 && (
+                        <p className="text-xs font-mono text-muted-foreground">
+                          Ask a question to get personalized strategy advice from your analytics.
+                        </p>
+                      )}
+                      {chatMessages.map((message, index) => (
+                        <div key={index} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[85%] rounded px-3 py-2 border ${message.role === 'user' ? 'bg-primary/20 border-primary/40' : 'bg-card border-border'}`}>
+                            <div className="flex items-center gap-2 mb-1">
+                              {message.role === 'user' ? <User className="w-3 h-3 text-primary" /> : <Bot className="w-3 h-3 text-primary" />}
+                              <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{message.role === 'user' ? 'You' : 'AI Strategist'}</span>
+                            </div>
+                            <p className="text-xs sm:text-sm font-mono text-foreground whitespace-pre-wrap">{message.content}</p>
+                          </div>
+                        </div>
+                      ))}
+                      {strategyChatLoading && (
+                        <div className="flex justify-start">
+                          <div className="rounded px-3 py-2 border border-border bg-card">
+                            <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Thinking with your analytics...
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {strategySuggestions.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Follow-up suggestions</p>
+                        <div className="flex flex-wrap gap-2">
+                          {strategySuggestions.map((suggestion, index) => (
+                            <Button
+                              key={`${suggestion}-${index}`}
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="font-mono text-[10px] uppercase tracking-wider"
+                              onClick={() => sendStrategyQuestion(suggestion)}
+                              disabled={strategyChatLoading}
+                            >
+                              {suggestion}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <Input
+                        value={strategyQuestion}
+                        onChange={(event) => setStrategyQuestion(event.target.value)}
+                        placeholder="Ask about growth strategy using your data..."
+                        className="font-mono text-sm"
+                        maxLength={500}
+                        disabled={strategyChatLoading}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            sendStrategyQuestion();
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        className="font-mono uppercase tracking-wider text-xs"
+                        onClick={() => sendStrategyQuestion()}
+                        disabled={strategyChatLoading || !strategyQuestion.trim()}
+                      >
+                        Ask
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>

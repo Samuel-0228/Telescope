@@ -4,6 +4,16 @@ interface OpenAIResponse {
   output_text?: string;
 }
 
+interface GeminiResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?: string;
+      }>;
+    };
+  }>;
+}
+
 const maybeOpenAiPlan = async (prompt: string): Promise<string | null> => {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -121,4 +131,38 @@ export const generatePostIdeas = async (metrics: ChannelMetrics, patterns: Patte
   const prompt = JSON.stringify({ metrics, patterns, category, task: 'Generate 5 Telegram post ideas as JSON with title, angle, format, hook, rationale.' });
   const openAiIdeas = parseJsonOrNull<{ ideas?: PostIdea[] }>(await maybeOpenAiPlan(prompt));
   return openAiIdeas?.ideas?.length ? openAiIdeas.ideas : buildDefaultIdeas(category, metrics, patterns);
+};
+
+export const generateGeminiStrategyAnswer = async (prompt: string): Promise<string | null> => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return null;
+  }
+
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: prompt }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.4,
+        maxOutputTokens: 350,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = (await response.json()) as GeminiResponse;
+  const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('\n').trim();
+  return text || null;
 };

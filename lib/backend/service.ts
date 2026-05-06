@@ -4,7 +4,7 @@ import { getRepository } from './repository';
 import { getTelegramCollector } from './collector';
 import type { AnalyzedChannelResponse, ChannelMetrics, ComparisonRow, LeaderboardEntry, PostIdea, WeeklyPlanItem } from './types';
 import { normalizeTelegramUsername } from './utils';
-import { generatePostIdeas, generateWeeklyPlan } from './ai';
+import { generateGeminiStrategyAnswer, generatePostIdeas, generateWeeklyPlan } from './ai';
 
 export interface AnalyzeChannelInput {
   channelReference: string;
@@ -12,6 +12,12 @@ export interface AnalyzeChannelInput {
 
 export interface CompareChannelsInput {
   channelReferences: string[];
+}
+
+export interface StrategyChatInput {
+  channelReference: string;
+  userQuestion: string;
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>;
 }
 
 export interface GeneratedAnalysis extends AnalyzedChannelResponse {
@@ -179,6 +185,92 @@ export const generatePlan = async (channelReference: string): Promise<{ channel:
     channel: analysis.channel.username,
     schedule,
   };
+};
+
+export const chatStrategy = async (input: StrategyChatInput): Promise<{ answer: string; suggestions?: string[] }> => {
+  const normalizedQuestion = input.userQuestion.trim().replace(/\s+/g, ' ').slice(0, 500);
+  if (!normalizedQuestion) {
+    return {
+      answer: 'Please enter a question so I can generate a strategy.',
+    };
+  }
+
+  const analysis = await analyzeChannel({ channelReference: input.channelReference });
+  if (!analysis.metrics.numberOfPosts) {
+    return {
+      answer: 'Analyze your channel first to get personalized strategy insights.',
+    };
+  }
+
+  const context = {
+    total_views: analysis.metrics.totalViews,
+    avg_views_per_post: Math.round(analysis.metrics.avgViewsPerPost),
+    engagement_rate: Number(analysis.metrics.engagementRate.toFixed(2)),
+    posting_frequency: Number(analysis.metrics.postingFrequency.toFixed(2)),
+    best_posting_day: analysis.metrics.bestPostingDay,
+    best_posting_hour: analysis.metrics.bestPostingHour,
+    content_type_performance: analysis.metrics.contentTypePerformance,
+    top_posts_summary: analysis.metrics.topPosts.slice(0, 5).map((post) => ({
+      title: post.title,
+      type: post.type,
+      views: post.views,
+      engagement: Number(post.engagement.toFixed(2)),
+    })),
+    detected_patterns: {
+      common_posting_time: analysis.patterns.commonPostingTime,
+      common_content_type: analysis.patterns.commonContentType,
+      top_performing_percent: analysis.patterns.topPerformingPercent,
+      average_post_length: analysis.patterns.averageLength,
+    },
+    growth_score: analysis.growthScore,
+  };
+
+  const recentHistory = (input.history || []).slice(-5).map((message) => ({
+    role: message.role,
+    content: message.content.trim().replace(/\s+/g, ' ').slice(0, 500),
+  }));
+
+  const prompt = `You are a Telegram growth expert.
+
+Here is the channel data:
+${JSON.stringify(context, null, 2)}
+
+Recent chat history:
+${JSON.stringify(recentHistory, null, 2)}
+
+Answer the user's question using ONLY this data.
+Give actionable, specific advice.
+Avoid generic answers.
+Be concise but insightful.
+
+User question:
+${normalizedQuestion}
+
+Return strict JSON:
+{
+  "answer": "string",
+  "suggestions": ["optional suggestion 1", "optional suggestion 2", "optional suggestion 3"]
+}`;
+
+  const rawAnswer = await generateGeminiStrategyAnswer(prompt);
+  if (!rawAnswer) {
+    return {
+      answer: 'Analyze your channel first to get personalized strategy insights.',
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(rawAnswer) as { answer?: string; suggestions?: string[] };
+    return {
+      answer: parsed.answer || 'I could not generate a focused answer. Please try rephrasing your question.',
+      suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions.slice(0, 3) : [],
+    };
+  } catch {
+    return {
+      answer: rawAnswer,
+      suggestions: [],
+    };
+  }
 };
 
 export const runMaintenanceJobs = async (): Promise<{ leaderboard: LeaderboardEntry[]; refreshedAt: string }> => {
