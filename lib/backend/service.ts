@@ -25,17 +25,21 @@ export interface GeneratedAnalysis extends AnalyzedChannelResponse {
 const repository = getRepository();
 const collector = getTelegramCollector();
 
-const resolveChannelCacheKey = async (channelReference: string): Promise<string> => {
+const resolveChannelCacheKey = async (channelReference: string): Promise<string | null> => {
   const username = normalizeTelegramUsername(channelReference);
   if (!username) {
-    return extractChannelLabel(channelReference);
+    // If it's not a username, we can't use a UUID cache key yet.
+    return null;
   }
 
   const existingChannel = await repository.findChannelByUsername(username);
-  return existingChannel?.id || username;
+  // Only return a cache key when we have a persisted channel id (UUID).
+  return existingChannel?.id || null;
 };
 
-const readCacheIfFresh = async (channelId: string, timeRange: TimeRange): Promise<AnalyzedChannelResponse | null> => {
+const readCacheIfFresh = async (channelId: string | null, timeRange: TimeRange): Promise<AnalyzedChannelResponse | null> => {
+  if (!channelId) return null;
+
   const cached = await repository.readMetricsCache(channelId, timeRange);
   if (!cached) {
     return null;
