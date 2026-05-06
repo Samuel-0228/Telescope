@@ -51,7 +51,7 @@ export default function SavvyScope() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           channel_url: channelLink,
-          time_range: parseInt(timeFilter),
+          time_range: timeFilter,
         }),
       });
       
