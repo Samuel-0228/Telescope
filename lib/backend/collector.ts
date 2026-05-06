@@ -163,7 +163,49 @@ class ScraperTelegramCollector extends SyntheticTelegramCollector {
       }
 
       if (!posts.length) {
-        throw new Error('No public posts found for this channel in the selected time range.');
+        // No posts in the requested time range — try a fallback to 'all' (no cutoff)
+        const fallbackPosts: PostRecord[] = [];
+        let fallbackMatch: RegExpExecArray | null;
+        // re-run extraction without cutoff
+        messageBlockRegex.lastIndex = 0;
+        while ((fallbackMatch = messageBlockRegex.exec(html)) !== null) {
+          const block = fallbackMatch[0];
+          const datetimeMatch = block.match(datetimeRegex);
+          if (!datetimeMatch) continue;
+          const timestamp = new Date(datetimeMatch[1]);
+          if (Number.isNaN(timestamp.getTime())) continue;
+
+          const linkMatch = block.match(postLinkRegex);
+          const externalPostId = linkMatch ? `${linkMatch[1]}_${linkMatch[2]}` : `${username}_${timestamp.toISOString()}`;
+          const textMatch = block.match(textBlockRegex);
+          const content = textMatch
+            ? decodeHtml(textMatch[1].replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim())
+            : '(no text)';
+          const viewsMatch = block.match(viewsRegex);
+          const views = viewsMatch ? Number(viewsMatch[1].replace(/[^0-9]/g, '')) : 0;
+          let mediaType: PostRecord['mediaType'] = 'text';
+          if (photoRegex.test(block)) mediaType = 'image';
+          if (videoRegex.test(block)) mediaType = 'video';
+
+          fallbackPosts.push({
+            id: `scrape_${username}_${externalPostId}`,
+            channelId: channel.id,
+            externalPostId,
+            content: content || '(no text)',
+            mediaType,
+            views,
+            reactions: 0,
+            comments: 0,
+            timestamp: timestamp.toISOString(),
+            raw: { source: 'scraper', fallback: true },
+          });
+        }
+
+        if (fallbackPosts.length) {
+          return { channel, posts: fallbackPosts, source: 'scraper' };
+        }
+
+        throw new Error('No public posts found for this channel. It may be private or empty.');
       }
 
       return {

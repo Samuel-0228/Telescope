@@ -190,13 +190,28 @@ export default function SavvyScope() {
                       </div>
                     )}
                     <div className="flex flex-col sm:flex-row gap-3">
-                      <Input
-                        placeholder="Paste Telegram channel link..."
-                        value={channelLink}
-                        onChange={(e) => setChannelLink(e.target.value)}
-                        className="flex-1 text-sm font-mono bg-background border-border text-foreground placeholder:text-muted-foreground"
-                        disabled={loading}
-                      />
+                      <div className="flex-1">
+                        <Input
+                          placeholder="Paste Telegram channel link..."
+                          value={channelLink}
+                          onChange={(e) => setChannelLink(e.target.value)}
+                          className="w-full text-sm font-mono bg-background border-border text-foreground placeholder:text-muted-foreground"
+                          disabled={loading}
+                        />
+                        <div className="mt-2 sm:mt-3 w-48">
+                          <Select value={timeFilter} onValueChange={(value) => setTimeFilter(value)}>
+                            <SelectTrigger className="w-full text-xs font-mono uppercase tracking-wide bg-card border-border">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-card border-border">
+                              <SelectItem value="30" className="font-mono text-xs">Last 30 days</SelectItem>
+                              <SelectItem value="60" className="font-mono text-xs">Last 60 days</SelectItem>
+                              <SelectItem value="90" className="font-mono text-xs">Last 90 days</SelectItem>
+                              <SelectItem value="all" className="font-mono text-xs">Overall</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                       <Button 
                         className="w-full sm:w-auto font-mono uppercase tracking-wide text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-all disabled:opacity-50"
                         onClick={fetchChannelAnalysis}
