@@ -262,13 +262,8 @@ class MTProtoTelegramCollector extends SyntheticTelegramCollector {
   private readonly retryDelayMs = 1000;
 
   private normalizeChannelInput(input: string): string {
-    if (!input) return '';
-    let cleaned = input.trim().toLowerCase();
-    cleaned = cleaned.replace(/^https?:\/\/(www\.)?t\.me\//i, '');
-    cleaned = cleaned.replace(/^t\.me\//i, '');
-    cleaned = cleaned.replace(/^@/, '');
-    cleaned = cleaned.replace(/[^a-z0-9_]/g, '');
-    return cleaned;
+    const normalized = normalizeTelegramUsername(input);
+    return normalized.replace(/[^a-z0-9_]/g, '');
   }
 
   private async delay(ms: number): Promise<void> {

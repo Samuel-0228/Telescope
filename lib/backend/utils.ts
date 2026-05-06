@@ -60,13 +60,31 @@ export const normalizeTelegramUsername = (value: string): string => {
   }
 
   const cleaned = input
-    .replace(/^https?:\/\/(?:t\.me|telegram\.me)\//i, '')
+    .replace(/^https?:\/\/(?:www\.)?(?:t\.me|telegram\.me)\//i, '')
     .replace(/^@/, '')
     .replace(/\?.*$/, '')
-    .replace(/\/.*$/, '')
+    .replace(/#.*$/, '')
     .trim();
 
-  return cleaned.toLowerCase();
+  const parts = cleaned.split('/').filter(Boolean);
+  if (!parts.length) {
+    return '';
+  }
+
+  const first = parts[0]?.toLowerCase();
+  let candidate = parts[parts.length - 1];
+
+  // Handle public web-view links like t.me/s/<username>[/<post_id>]
+  if (first === 's' && parts.length >= 2) {
+    candidate = parts[1];
+  }
+
+  // Ignore invite/private-style links that are not usernames.
+  if (candidate.startsWith('+') || candidate.toLowerCase() === 'joinchat') {
+    return '';
+  }
+
+  return candidate.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
 };
 
 export const extractChannelLabel = (value: string): string => {
