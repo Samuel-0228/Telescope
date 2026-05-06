@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -25,12 +26,17 @@ export default function ThreeFortyEight() {
   const [strategies, setStrategies] = useState<any[]>([]);
   const [growthScore, setGrowthScore] = useState<number>(0);
   const [loading, setLoading] = useState(false);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
+  const [compareChannelInputs, setCompareChannelInputs] = useState(['', '', '']);
+  const [compareResult, setCompareResult] = useState<any>(null);
+  const [selectedStrategy, setSelectedStrategy] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const handleStrategyLearnMore = () => {
-    setActiveTab('dashboard');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  const openStrategyDetail = (strategy: any) => {
+    setSelectedStrategy(strategy);
   };
 
   const COLORS = theme === 'red' 
@@ -80,9 +86,41 @@ export default function ThreeFortyEight() {
     }
   };
 
+  const fetchCompareChannels = async () => {
+    const channels = compareChannelInputs.map((value) => value.trim()).filter(Boolean);
+    if (!channels.length) {
+      setCompareError('Enter at least one channel to compare');
+      return;
+    }
+
+    setCompareLoading(true);
+    setCompareError(null);
+
+    try {
+      const response = await fetch('/api/compare-channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channels }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        throw new Error(errorPayload?.error || 'Failed to compare channels');
+      }
+
+      const data = await response.json();
+      setCompareResult(data);
+      setActiveTab('compare');
+    } catch (err) {
+      setCompareError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setCompareLoading(false);
+    }
+  };
+
   // Fetch leaderboard
   const fetchLeaderboard = async () => {
-    setLoading(true);
+    setLeaderboardLoading(true);
     try {
       const response = await fetch('/api/leaderboard');
       if (!response.ok) {
@@ -94,7 +132,7 @@ export default function ThreeFortyEight() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
-      setLoading(false);
+      setLeaderboardLoading(false);
     }
   };
 
@@ -473,67 +511,138 @@ export default function ThreeFortyEight() {
                   <h2 className="text-2xl sm:text-4xl font-mono font-bold text-foreground">
                     <span className="text-primary">COMPARE</span> CHANNELS
                   </h2>
-                  <p className="text-sm text-muted-foreground font-mono">Compare up to 3 channels side-by-side</p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {['TECH DAILY', 'GROWTH HACKER', 'DEV TIPS'].map((channel, idx) => (
-                    <Card key={idx} className="border border-border bg-card/50 hover:border-primary/50 transition-colors">
-                      <CardHeader>
-                        <CardTitle className="text-sm font-mono uppercase tracking-wider text-foreground">{channel}</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div>
-                          <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Total Views (Lifetime)</p>
-                          <p className="text-3xl font-mono font-bold text-foreground mt-1">285K</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Engagement Rate</p>
-                          <p className="text-2xl font-mono font-bold text-primary mt-1">12.5%</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Posting Frequency</p>
-                          <p className="text-lg font-mono font-semibold text-foreground mt-1">3.2 posts/day</p>
-                        </div>
-                        <Button 
-                          variant="outline" 
-                          className="w-full text-xs font-mono uppercase tracking-wider border-border text-foreground hover:border-primary hover:text-primary transition-colors"
-                          size="sm"
-                        >
-                          VIEW DETAILS
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))}
+                  <p className="text-sm text-muted-foreground font-mono">Compare up to 3 channels using stored lifetime metrics</p>
                 </div>
 
                 <Card className="border border-border bg-card/50">
                   <CardHeader>
                     <CardTitle className="text-xs font-mono uppercase tracking-wide flex items-center gap-2">
-                      <span className="text-primary">[]</span> COMPARISON MATRIX
+                      <span className="text-primary">[]</span> COMPARE CHANNELS
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart
-                        data={[
-                          { metric: 'VIEWS', 'Tech Daily': 285, 'Growth Hacker': 245, 'Dev Tips': 215 },
-                          { metric: 'ENGAGEMENT', 'Tech Daily': 12.5, 'Growth Hacker': 11.8, 'Dev Tips': 11.2 },
-                          { metric: 'POSTS', 'Tech Daily': 95, 'Growth Hacker': 87, 'Dev Tips': 82 },
-                        ]}
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                      {compareChannelInputs.map((value, index) => (
+                        <Input
+                          key={index}
+                          value={value}
+                          onChange={(event) => {
+                            const nextInputs = [...compareChannelInputs];
+                            nextInputs[index] = event.target.value;
+                            setCompareChannelInputs(nextInputs);
+                          }}
+                          placeholder={`Channel ${index + 1} URL or @username`}
+                          className="w-full text-sm font-mono bg-background border-border text-foreground placeholder:text-muted-foreground"
+                        />
+                      ))}
+                    </div>
+                    {compareError && (
+                      <div className="p-3 bg-destructive/10 border border-destructive/50 rounded text-sm text-destructive font-mono">
+                        {compareError}
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-muted-foreground font-mono uppercase tracking-wide">
+                        Full history is collected automatically when a channel is not yet stored.
+                      </p>
+                      <Button
+                        className="w-full sm:w-auto font-mono uppercase tracking-wide text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-all disabled:opacity-50"
+                        onClick={fetchCompareChannels}
+                        disabled={compareLoading}
                       >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
-                        <XAxis dataKey="metric" tick={{ fontSize: 12, fill: '#808080' }} />
-                        <YAxis tick={{ fontSize: 12, fill: '#808080' }} />
-                        <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #1a1a1a' }} />
-                        <Legend wrapperStyle={{ color: '#808080' }} />
-                        <Bar dataKey="Tech Daily" fill={COLORS[0]} />
-                        <Bar dataKey="Growth Hacker" fill={COLORS[1]} />
-                        <Bar dataKey="Dev Tips" fill={COLORS[2]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                        {compareLoading ? 'COMPARING...' : 'COMPARE'}
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
+
+                {compareResult?.comparisons?.length ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                      {compareResult.comparisons.map((comparison: any) => (
+                        <Card key={comparison.channelId} className="border border-border bg-card/50 hover:border-primary/50 transition-colors">
+                          <CardHeader>
+                            <CardTitle className="text-sm font-mono uppercase tracking-wider text-foreground">{comparison.channelName}</CardTitle>
+                            <CardDescription className="font-mono text-xs text-muted-foreground">@{comparison.username}</CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <div>
+                              <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Total Views (Lifetime)</p>
+                              <p className="text-3xl font-mono font-bold text-foreground mt-1">{comparison.totalViews.toLocaleString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Engagement Rate</p>
+                              <p className="text-2xl font-mono font-bold text-primary mt-1">{comparison.engagementRate.toFixed(1)}%</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Posting Frequency</p>
+                              <p className="text-lg font-mono font-semibold text-foreground mt-1">{comparison.postingFrequency.toFixed(2)} posts/day</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Top Content</p>
+                              <p className="text-sm font-mono font-semibold text-foreground mt-1 uppercase">{comparison.topContentType}</p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+
+                    <Card className="border border-border bg-card/50">
+                      <CardHeader>
+                        <CardTitle className="text-xs font-mono uppercase tracking-wide flex items-center gap-2">
+                          <span className="text-primary">[]</span> COMPARISON MATRIX
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border">
+                              <th className="px-2 py-3 text-left font-mono text-xs uppercase tracking-wider text-muted-foreground">Metric</th>
+                              {compareResult.comparisons.map((comparison: any) => (
+                                <th key={comparison.channelId} className="px-2 py-3 text-right font-mono text-xs uppercase tracking-wider text-muted-foreground">{comparison.channelName}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[
+                              { label: 'TOTAL VIEWS', getter: (comparison: any) => comparison.totalViews.toLocaleString() },
+                              { label: 'ENGAGEMENT', getter: (comparison: any) => `${comparison.engagementRate.toFixed(1)}%` },
+                              { label: 'FREQUENCY', getter: (comparison: any) => `${comparison.postingFrequency.toFixed(2)} / day` },
+                              { label: 'TOP CONTENT', getter: (comparison: any) => String(comparison.topContentType).toUpperCase() },
+                            ].map((row) => (
+                              <tr key={row.label} className="border-b border-border/60 last:border-0">
+                                <td className="px-2 py-3 font-mono text-xs uppercase tracking-wider text-foreground">{row.label}</td>
+                                {compareResult.comparisons.map((comparison: any) => (
+                                  <td key={`${row.label}-${comparison.channelId}`} className="px-2 py-3 text-right font-mono text-sm text-foreground">
+                                    {row.getter(comparison)}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <Badge variant="outline" className="font-mono uppercase tracking-wider border-border text-foreground">
+                            Highest views: {compareResult.topPerformers?.total_views || 'N/A'}
+                          </Badge>
+                          <Badge variant="outline" className="font-mono uppercase tracking-wider border-border text-foreground">
+                            Highest engagement: {compareResult.topPerformers?.engagement_rate || 'N/A'}
+                          </Badge>
+                          <Badge variant="outline" className="font-mono uppercase tracking-wider border-border text-foreground">
+                            Highest frequency: {compareResult.topPerformers?.posting_frequency || 'N/A'}
+                          </Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                ) : (
+                  <Card className="border border-border bg-card/50">
+                    <CardContent className="py-12 text-center space-y-3">
+                      <p className="text-muted-foreground font-mono text-sm">No comparison data loaded</p>
+                      <p className="text-xs text-muted-foreground font-mono">Enter channels above to generate a real comparison from stored analytics</p>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             )}
 
@@ -544,10 +653,10 @@ export default function ThreeFortyEight() {
                   <h2 className="text-2xl sm:text-4xl font-mono font-bold text-foreground">
                     <span className="text-primary">TOP 10</span> CHANNELS
                   </h2>
-                  <p className="text-sm text-muted-foreground font-mono">Ranked by lifetime engagement rate</p>
+                  <p className="text-sm text-muted-foreground font-mono">Ranked by lifetime engagement rate, then lifetime views</p>
                 </div>
 
-                {loading ? (
+                {leaderboardLoading ? (
                   <div className="text-center py-12">
                     <p className="text-muted-foreground font-mono text-sm">Loading leaderboard...</p>
                   </div>
@@ -602,7 +711,7 @@ export default function ThreeFortyEight() {
                             </div>
                             <div className="hidden sm:block">
                               <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Views</p>
-                              <p className="font-mono font-bold text-sm mt-1">{((channel.total_views_30d || 0) / 1000).toFixed(0)}K</p>
+                              <p className="font-mono font-bold text-sm mt-1">{(channel.total_views_30d || 0).toLocaleString()}</p>
                             </div>
                           </div>
                         </div>
@@ -625,9 +734,7 @@ export default function ThreeFortyEight() {
                 <>
                 <div className="border-b border-border pb-4">
                   <div className="flex items-center gap-3">
-                    <div className="relative w-4 h-4 flex-shrink-0">
-                      <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(0 30%, 0 0, 30% 0, 30% 30%, 0 30%)'}} />
-                    </div>
+                    <div className="relative w-4 h-4 flex-shrink-0 border border-primary border-r-0 border-b-0" />
                     <h2 className="text-sm font-mono font-bold text-foreground uppercase tracking-widest">
                       STRATEGY
                     </h2>
@@ -645,37 +752,32 @@ export default function ThreeFortyEight() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-6">
                       <div>
                         <p className="text-5xl font-mono font-bold text-primary">{growthScore}</p>
                         <p className="text-xs text-muted-foreground font-mono mt-1">/ 100</p>
                       </div>
-                      <div className="w-32 h-32 rounded-full border-4 border-primary/20 flex items-center justify-center relative">
-                        <div 
-                          className="absolute inset-0 rounded-full border-4 border-transparent border-t-primary"
-                          style={{
-                            transform: `rotate(${(growthScore / 100) * 360}deg)`,
-                            transition: 'transform 1s ease-out'
-                          }}
-                        ></div>
+                      <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-primary/20 flex items-center justify-center relative flex-shrink-0">
+                        <div className="absolute inset-2 rounded-full border border-primary/60 opacity-60" />
+                        <div className="absolute inset-6 rounded-full border border-primary/30 opacity-40" />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
                 {strategies.length > 0 ? (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {strategies.map((strategy: any, idx: number) => (
                     <Card 
                       key={idx} 
                       className="border border-border bg-card/50 hover:border-primary/50 transition-all cursor-pointer group relative overflow-hidden focus-within:border-primary/50"
                       role="button"
                       tabIndex={0}
-                      onClick={handleStrategyLearnMore}
+                      onClick={() => openStrategyDetail(strategy)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();
-                          handleStrategyLearnMore();
+                          openStrategyDetail(strategy);
                         }
                       }}
                     >
@@ -684,25 +786,24 @@ export default function ThreeFortyEight() {
                         <div className="flex h-full flex-col justify-between gap-4">
                           <div className="space-y-2">
                             <div className="flex items-center gap-3">
-                              <div className="relative w-5 h-5 flex items-center justify-center">
-                                <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(0 20%, 0 0, 20% 0, 20% 20%, 0 20%)'}} />
-                                <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(80% 0, 100% 0, 100% 20%, 80% 20%, 80% 0)'}} />
-                                <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(0 80%, 0 100%, 20% 100%, 20% 80%, 0 80%)'}} />
-                                <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(100% 100%, 100% 80%, 80% 80%, 80% 100%, 100% 100%)'}} />
+                              <div className="relative w-5 h-5 flex items-center justify-center rounded-sm border border-primary/60">
                                 <div className="w-1 h-1 bg-primary rounded-full" />
                               </div>
-                              <p className="font-mono font-bold text-sm text-foreground uppercase tracking-wider">{strategy.title}</p>
+                              <div className="space-y-1">
+                                <p className="font-mono font-bold text-sm text-foreground uppercase tracking-wider">{strategy.title}</p>
+                                <p className="text-[10px] font-mono uppercase tracking-wider text-primary/80">Confidence {(strategy.confidence * 100).toFixed(0)}%</p>
+                              </div>
                             </div>
-                            <p className="text-xs text-muted-foreground font-mono">{strategy.description}</p>
+                            <p className="text-xs text-muted-foreground font-mono leading-relaxed">{strategy.description}</p>
                           </div>
                           <Button
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="w-fit px-0 text-primary hover:text-primary hover:bg-transparent opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                            className="w-full justify-between px-0 text-primary hover:text-primary hover:bg-transparent opacity-100 transition-opacity"
                             onClick={(event) => {
                               event.stopPropagation();
-                              handleStrategyLearnMore();
+                              openStrategyDetail(strategy);
                             }}
                           >
                             <span className="text-xs font-mono uppercase tracking-wider">Learn more</span>
@@ -727,6 +828,50 @@ export default function ThreeFortyEight() {
                 )}
               </div>
             )}
+
+            <Dialog open={Boolean(selectedStrategy)} onOpenChange={(open) => {
+              if (!open) {
+                setSelectedStrategy(null);
+              }
+            }}>
+              <DialogContent className="sm:max-w-xl">
+                <DialogHeader>
+                  <DialogTitle className="font-mono uppercase tracking-wide text-foreground">
+                    {selectedStrategy?.title || 'Strategy detail'}
+                  </DialogTitle>
+                  <DialogDescription className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
+                    Full history analysis from stored channel posts
+                  </DialogDescription>
+                </DialogHeader>
+                {selectedStrategy && (
+                  <div className="space-y-4 pt-2">
+                    <p className="text-sm font-mono text-foreground leading-relaxed">
+                      {selectedStrategy.description}
+                    </p>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <Card className="border border-border bg-card/60">
+                        <CardContent className="pt-4">
+                          <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Confidence</p>
+                          <p className="text-lg font-mono font-bold text-primary mt-1">{(selectedStrategy.confidence * 100).toFixed(0)}%</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border border-border bg-card/60">
+                        <CardContent className="pt-4">
+                          <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Signal</p>
+                          <p className="text-xs font-mono font-bold text-foreground mt-1 break-all">{selectedStrategy.signal}</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border border-border bg-card/60">
+                        <CardContent className="pt-4">
+                          <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Action</p>
+                          <p className="text-xs font-mono font-bold text-foreground mt-1">Apply this across the full channel history.</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </div>

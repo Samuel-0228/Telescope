@@ -2,7 +2,6 @@ import { analyzePatterns, calculateChannelMetrics, calculateGrowthScore } from '
 import { checkRateLimit } from './rate-limit';
 import { getRepository } from './repository';
 import { getTelegramCollector } from './collector';
-import { generateLeaderboardSeeds } from './mock-data';
 import type { AnalyzedChannelResponse, ChannelMetrics, ComparisonRow, LeaderboardEntry, PostIdea, WeeklyPlanItem } from './types';
 import { normalizeTelegramUsername } from './utils';
 import { generatePostIdeas, generateWeeklyPlan } from './ai';
@@ -113,9 +112,9 @@ export const compareChannels = async (input: CompareChannelsInput): Promise<{ co
   }));
 
   const topPerformers = {
-    total_views: comparisons.slice().sort((left, right) => right.totalViews - left.totalViews)[0]?.channelName || 'N/A',
-    engagement_rate: comparisons.slice().sort((left, right) => right.engagementRate - left.engagementRate)[0]?.channelName || 'N/A',
-    posting_frequency: comparisons.slice().sort((left, right) => right.postingFrequency - left.postingFrequency)[0]?.channelName || 'N/A',
+    total_views: comparisons.slice().sort((left, right) => right.totalViews - left.totalViews || right.engagementRate - left.engagementRate)[0]?.channelName || 'N/A',
+    engagement_rate: comparisons.slice().sort((left, right) => right.engagementRate - left.engagementRate || right.totalViews - left.totalViews)[0]?.channelName || 'N/A',
+    posting_frequency: comparisons.slice().sort((left, right) => right.postingFrequency - left.postingFrequency || right.totalViews - left.totalViews)[0]?.channelName || 'N/A',
   };
 
   return { comparisons, topPerformers };
@@ -132,7 +131,7 @@ const buildLeaderboardFromAnalyses = (analyses: AnalyzedChannelResponse[]): Lead
       engagement_rate: analysis.metrics.engagementRate,
       total_views_30d: analysis.metrics.totalViews,
     }))
-    .sort((left, right) => right.engagement_rate - left.engagement_rate)
+    .sort((left, right) => right.engagement_rate - left.engagement_rate || right.total_views_30d - left.total_views_30d)
     .slice(0, 10)
     .map((entry, index) => ({
       ...entry,
@@ -152,21 +151,11 @@ export const refreshLeaderboard = async (): Promise<LeaderboardEntry[]> => {
   }
 
   const trackedChannels = await repository.listTrackedChannels(topN);
-  if (trackedChannels.length) {
-    const analyses = await Promise.all(
-      trackedChannels.map((channel) => analyzeChannel({ channelReference: channel.username })),
-    );
-
-    const leaderboard = buildLeaderboardFromAnalyses(analyses);
-    await repository.writeLeaderboard(leaderboard);
-    return leaderboard;
+  if (!trackedChannels.length) {
+    return [];
   }
 
-  const seedChannels = generateLeaderboardSeeds();
-  const analyses = await Promise.all(
-    seedChannels.map((seed) => analyzeChannel({ channelReference: seed.username })),
-  );
-
+  const analyses = await Promise.all(trackedChannels.map((channel) => analyzeChannel({ channelReference: channel.username })));
   const leaderboard = buildLeaderboardFromAnalyses(analyses);
   await repository.writeLeaderboard(leaderboard);
   return leaderboard;

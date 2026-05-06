@@ -276,17 +276,27 @@ class ScraperTelegramCollector extends SyntheticTelegramCollector {
       };
 
       const deduped = new Map<string, PostRecord>();
+      const seenPageFingerprints = new Set<string>();
       let oldestMessageId: number | null = null;
       let expectedPostCount: number | null = null;
       let fetchComplete = false;
+      let pageIndex = 0;
 
-      for (let pageIndex = 0; pageIndex < 300; pageIndex += 1) {
+      while (true) {
         const pageHtml = pageIndex === 0 ? html : await fetchPage(oldestMessageId || undefined);
+        pageIndex += 1;
+
         const pagePosts = extractPostsFromHtml(pageHtml, channel);
         if (!pagePosts.length) {
           fetchComplete = true;
           break;
         }
+
+        const pageFingerprint = pagePosts.map((post) => post.externalPostId).join('|');
+        if (seenPageFingerprints.has(pageFingerprint)) {
+          break;
+        }
+        seenPageFingerprints.add(pageFingerprint);
 
         pagePosts.forEach((post) => {
           deduped.set(post.externalPostId, post);
@@ -305,10 +315,15 @@ class ScraperTelegramCollector extends SyntheticTelegramCollector {
           expectedPostCount = maxId;
         }
 
-        if (!minId || minId <= 1 || minId === oldestMessageId) {
+        if (!minId || minId <= 1) {
           fetchComplete = true;
           break;
         }
+
+        if (oldestMessageId !== null && minId >= oldestMessageId) {
+          break;
+        }
+
         oldestMessageId = minId;
       }
 
@@ -318,6 +333,10 @@ class ScraperTelegramCollector extends SyntheticTelegramCollector {
 
       if (!posts.length) {
         throw new Error('No public posts found for this channel. It may be private, empty, or Telegram changed the page structure.');
+      }
+
+      if (expectedPostCount && posts.length < expectedPostCount) {
+        fetchComplete = false;
       }
 
       return {

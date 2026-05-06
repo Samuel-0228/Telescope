@@ -68,6 +68,7 @@ create or replace function public.refresh_leaderboard_from_posts(top_n integer d
 set search_path = public as $$ begin if top_n is null
     or top_n < 1 then top_n := 10;
 end if;
+delete from public.leaderboard;
 with ranked as (
     select c.id as channel_id,
         coalesce(sum(p.views), 0)::bigint as total_views_30d,
@@ -91,7 +92,7 @@ with ranked as (
         ) as rank
     from public.channels c
         left join public.posts p on p.channel_id = c.id
-        and p.post_timestamp >= now() - interval '30 days'
+        and coalesce(p.raw_payload->>'source', '') <> 'synthetic'
     group by c.id
 ),
 picked as (
@@ -113,14 +114,7 @@ select channel_id,
     total_views_30d,
     rank,
     now()
-from picked on conflict (rank) do
-update
-set channel_id = excluded.channel_id,
-    engagement_rate = excluded.engagement_rate,
-    total_views_30d = excluded.total_views_30d,
-    refreshed_at = now();
-delete from public.leaderboard
-where rank > top_n;
+from picked;
 end;
 $$;
 grant execute on function public.refresh_leaderboard_from_posts(integer) to anon,

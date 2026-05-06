@@ -122,6 +122,12 @@ const calculateBestDayAndHour = (posts: PostRecord[], preferViews: boolean): { b
 export const calculateChannelMetrics = (posts: PostRecord[]): ChannelMetrics => {
   const orderedPosts = [...posts].sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
   const totalViews = orderedPosts.reduce((sum, post) => sum + post.views, 0);
+  const maxSinglePostViews = orderedPosts.reduce((max, post) => Math.max(max, post.views), 0);
+
+  if (totalViews < maxSinglePostViews) {
+    throw new Error('Invalid channel metrics: total views cannot be lower than the highest single post view count.');
+  }
+
   const totalEngagement = orderedPosts.reduce((sum, post) => sum + post.reactions + post.comments, 0);
   const preferViews = !hasDirectEngagementSignals(orderedPosts);
   const numberOfPosts = orderedPosts.length;

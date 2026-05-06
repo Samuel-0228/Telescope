@@ -330,6 +330,11 @@ class SupabaseRepository implements RepositoryShape {
       throw new Error(`Failed to upsert leaderboard channels: ${channelError.message}`);
     }
 
+    const { error: clearError } = await this.client.from('leaderboard').delete();
+    if (clearError) {
+      throw new Error(`Failed to clear leaderboard: ${clearError.message}`);
+    }
+
     const leaderboardRows = entries.map((entry) => ({
       channel_id: entry.id,
       engagement_rate: entry.engagement_rate,
@@ -338,7 +343,7 @@ class SupabaseRepository implements RepositoryShape {
       refreshed_at: new Date().toISOString(),
     }));
 
-    const { error } = await this.client.from('leaderboard').upsert(leaderboardRows, { onConflict: 'rank' });
+    const { error } = await this.client.from('leaderboard').insert(leaderboardRows);
     if (error) {
       throw new Error(`Failed to write leaderboard: ${error.message}`);
     }
