@@ -28,6 +28,7 @@ export default function SavvyScope() {
   const [growthScore, setGrowthScore] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const COLORS = theme === 'red' 
     ? ['#ff3333', '#ff6666', '#dd2222', '#00ff88', '#ffaa00']
@@ -44,6 +45,7 @@ export default function SavvyScope() {
     
     setLoading(true);
     setError(null);
+    setNotice(null);
     
     try {
       const response = await fetch('/api/analyze-channel', {
@@ -63,7 +65,7 @@ export default function SavvyScope() {
       const data = await response.json();
 
       if (data.scraper_fallback) {
-        setError('No posts found in the selected range — showing all-time data.');
+        setNotice('No posts were found in the selected range, so the dashboard is showing all available public posts instead.');
       }
       
       setChannelMetrics(data.metrics);
@@ -187,7 +189,7 @@ export default function SavvyScope() {
                 <Card className="border border-border bg-card/50 hover:bg-card/80 transition-colors">
                   <CardHeader>
                     <CardTitle className="text-sm font-mono uppercase tracking-wide flex items-center gap-2">
-                      <span className="text-primary">⬜</span> ANALYZE CHANNEL
+                      <span className="text-primary">[]</span> ANALYZE CHANNEL
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -196,10 +198,15 @@ export default function SavvyScope() {
                         {error}
                       </div>
                     )}
+                    {notice && (
+                      <div className="p-3 bg-primary/10 border border-primary/40 rounded text-sm text-primary font-mono">
+                        {notice}
+                      </div>
+                    )}
                     <div className="flex flex-col sm:flex-row gap-3">
                       <div className="flex-1">
                         <Input
-                          placeholder="Paste Telegram channel link..."
+                          placeholder="Paste a Telegram link or enter @username..."
                           value={channelLink}
                           onChange={(e) => setChannelLink(e.target.value)}
                           className="w-full text-sm font-mono bg-background border-border text-foreground placeholder:text-muted-foreground"
@@ -294,7 +301,7 @@ export default function SavvyScope() {
                 {/* Additional Insights Grid with corner brackets */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {[
-                    { label: 'BEST POSTING DAY', value: channelMetrics.best_posting_day || 'N/A', desc: '↑ optimized engagement' },
+                    { label: 'BEST POSTING DAY', value: channelMetrics.best_posting_day || 'N/A', desc: 'Higher engagement window' },
                     { label: 'PEAK TIME', value: channelMetrics.best_posting_hour || 'N/A', desc: 'Engagement peak hour' },
                     { label: 'TOP CONTENT', value: channelMetrics.top_content_type || 'N/A', desc: 'Most performing type' },
                   ].map((item, idx) => (
@@ -316,7 +323,7 @@ export default function SavvyScope() {
                   <Card className="border border-border bg-card/50">
                     <CardHeader>
                       <CardTitle className="text-xs font-mono uppercase tracking-wide flex items-center gap-2">
-                        <span className="text-primary">⬜</span> VIEWS OVER TIME
+                        <span className="text-primary">[]</span> VIEWS OVER TIME
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -338,7 +345,7 @@ export default function SavvyScope() {
                   <Card className="border border-border bg-card/50">
                     <CardHeader>
                       <CardTitle className="text-xs font-mono uppercase tracking-wide flex items-center gap-2">
-                        <span className="text-primary">⬜</span> CONTENT DISTRIBUTION
+                        <span className="text-primary">[]</span> CONTENT DISTRIBUTION
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="flex justify-center">
@@ -378,7 +385,7 @@ export default function SavvyScope() {
                 <Card className="border border-border bg-card/50">
                   <CardHeader>
                     <CardTitle className="text-xs font-mono uppercase tracking-wide flex items-center gap-2">
-                      <span className="text-primary">⬜</span> TOP 5 PERFORMING POSTS
+                      <span className="text-primary">[]</span> TOP 5 PERFORMING POSTS
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -471,7 +478,7 @@ export default function SavvyScope() {
                 <Card className="border border-border bg-card/50">
                   <CardHeader>
                     <CardTitle className="text-xs font-mono uppercase tracking-wide flex items-center gap-2">
-                      <span className="text-primary">⬜</span> COMPARISON MATRIX
+                      <span className="text-primary">[]</span> COMPARISON MATRIX
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
