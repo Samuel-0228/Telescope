@@ -15,7 +15,7 @@ const getEngagementRate = (post: PostRecord): number => {
     return 0;
   }
 
-  return ((post.reactions + post.comments) / post.views) * 100;
+  return clamp(((post.reactions + post.comments) / post.views) * 100, 0, 100);
 };
 
 const hasDirectEngagementSignals = (posts: PostRecord[]): boolean =>
@@ -146,7 +146,8 @@ export const calculateChannelMetrics = (posts: PostRecord[]): ChannelMetrics => 
   });
 
   const peakViews = orderedPosts[0]?.views || 0;
-  const engagementRate = preferViews ? (peakViews ? toPercent(avgViewsPerPost / peakViews) : 0) : totalViews ? toPercent(totalEngagement / totalViews) : 0;
+  const engagementRateRaw = preferViews ? (peakViews ? toPercent(avgViewsPerPost / peakViews) : 0) : totalViews ? toPercent(totalEngagement / totalViews) : 0;
+  const engagementRate = clamp(engagementRateRaw, 0, 100);
   const { bestPostingDay, bestPostingHour } = calculateBestDayAndHour(orderedPosts, preferViews);
   const contentTypePerformance = calculateContentTypePerformance(mediaRows, numberOfPosts);
   const topContentType = getTopContentType(mediaRows);
