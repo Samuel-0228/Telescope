@@ -3,8 +3,8 @@ import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'TeleScope - Telegram Analytics & Growth Platform',
-  description: 'Turn Telegram channel data into actionable growth strategies with advanced analytics and insights',
+  title: '3:48 - Telegram Analytics & Growth Platform',
+  description: 'Turn Telegram channel data into actionable growth strategies with advanced analytics and insights. Built for serious creators.',
   generator: 'Gebeya Dala',
   icons: {
     icon: [

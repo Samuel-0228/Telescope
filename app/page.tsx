@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { TrendingUp, BarChart3, Users, Zap, Trophy, Calendar, Sparkles, Share2, ArrowRight, Gauge } from 'lucide-react';
 
-export default function SavvyScope() {
+export default function ThreeFortyEight() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [timeFilter, setTimeFilter] = useState('30');
   const [channelLink, setChannelLink] = useState('');
@@ -29,6 +29,11 @@ export default function SavvyScope() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const handleStrategyLearnMore = () => {
+    setActiveTab('dashboard');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const COLORS = theme === 'red' 
     ? ['#ff3333', '#ff6666', '#dd2222', '#00ff88', '#ffaa00']
@@ -115,7 +120,7 @@ export default function SavvyScope() {
               <div className="w-8 h-8 rounded border-2 border-primary flex items-center justify-center text-primary font-mono font-bold text-sm">
                 S
               </div>
-              <h1 className="text-lg font-mono font-bold text-foreground">SavvyScope</h1>
+              <h1 className="text-lg font-mono font-bold text-foreground">3:48</h1>
             </div>
             <p className="text-xs text-muted-foreground font-mono">TELEGRAM ANALYTICS</p>
             <button
@@ -156,7 +161,7 @@ export default function SavvyScope() {
               <div className="w-6 h-6 rounded border-2 border-primary flex items-center justify-center text-primary font-mono font-bold text-xs">
                 S
               </div>
-              <h1 className="text-base font-mono font-bold text-foreground">SavvyScope</h1>
+              <h1 className="text-base font-mono font-bold text-foreground">3:48</h1>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -236,6 +241,67 @@ export default function SavvyScope() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Features / About Section */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[
+                    {
+                      icon: BarChart3,
+                      title: 'DEEP ANALYTICS',
+                      desc: 'Unpack every metric that matters — views, reach, engagement rate, posting frequency, and content-type performance — all in one unified dashboard.',
+                      tag: 'CORE',
+                    },
+                    {
+                      icon: Sparkles,
+                      title: 'AI GROWTH STRATEGIES',
+                      desc: 'After each analysis, 3:48 generates tailored, actionable strategies based on your channel\'s actual data — not generic advice.',
+                      tag: 'INTELLIGENCE',
+                    },
+                    {
+                      icon: Trophy,
+                      title: 'LIVE LEADERBOARD',
+                      desc: 'See how the top 10 Telegram channels are performing right now. Benchmark your channel against the best in the ecosystem.',
+                      tag: 'RANKINGS',
+                    },
+                    {
+                      icon: TrendingUp,
+                      title: 'CHANNEL COMPARISON',
+                      desc: 'Place multiple channels side by side and visually compare views, engagement, and posting cadence across any time window.',
+                      tag: 'COMPARE',
+                    },
+                    {
+                      icon: Zap,
+                      title: 'PEAK TIMING INSIGHTS',
+                      desc: 'Know exactly which day and hour your audience is most active, so every post lands at maximum impact.',
+                      tag: 'TIMING',
+                    },
+                    {
+                      icon: Calendar,
+                      title: 'WHY 3:48?',
+                      desc: 'Built for Telegram creators who take their craft seriously. 3:48 cuts through noise — giving you the signal you need to grow with precision and speed.',
+                      tag: 'MISSION',
+                    },
+                  ].map(({ icon: Icon, title, desc, tag }, idx) => (
+                    <div
+                      key={idx}
+                      className="group relative border border-border bg-card/40 hover:bg-card/80 hover:border-primary/40 rounded-lg p-4 transition-all duration-200 overflow-hidden cursor-default"
+                    >
+                      {/* corner accents */}
+                      <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className="mt-0.5 p-1.5 border border-border group-hover:border-primary/50 rounded transition-colors">
+                          <Icon className="w-3.5 h-3.5 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-mono font-bold text-xs text-foreground uppercase tracking-wider">{title}</p>
+                          <span className="inline-block mt-1 px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wider border border-primary/30 text-primary/70 rounded">{tag}</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground font-mono leading-relaxed">{desc}</p>
+                    </div>
+                  ))}
+                </div>
 
                 {/* Time Filter and Key Metrics */}
                 {channelMetrics ? (
@@ -632,30 +698,50 @@ export default function SavvyScope() {
                 </Card>
 
                 {strategies.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {strategies.map((strategy: any, idx: number) => (
                     <Card 
                       key={idx} 
-                      className="border border-border bg-card/50 hover:border-primary/50 transition-all cursor-pointer group relative overflow-hidden"
+                      className="border border-border bg-card/50 hover:border-primary/50 transition-all cursor-pointer group relative overflow-hidden focus-within:border-primary/50"
+                      role="button"
+                      tabIndex={0}
+                      onClick={handleStrategyLearnMore}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          handleStrategyLearnMore();
+                        }
+                      }}
                     >
                       <div className="absolute top-0 left-0 w-1 h-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity" />
                       <CardContent className="pt-4 pb-4 pl-4">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-3">
-                            <div className="relative w-5 h-5 flex items-center justify-center">
-                              <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(0 20%, 0 0, 20% 0, 20% 20%, 0 20%)'}} />
-                              <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(80% 0, 100% 0, 100% 20%, 80% 20%, 80% 0)'}} />
-                              <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(0 80%, 0 100%, 20% 100%, 20% 80%, 0 80%)'}} />
-                              <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(100% 100%, 100% 80%, 80% 80%, 80% 100%, 100% 100%)'}} />
-                              <div className="w-1 h-1 bg-primary rounded-full" />
+                        <div className="flex h-full flex-col justify-between gap-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-3">
+                              <div className="relative w-5 h-5 flex items-center justify-center">
+                                <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(0 20%, 0 0, 20% 0, 20% 20%, 0 20%)'}} />
+                                <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(80% 0, 100% 0, 100% 20%, 80% 20%, 80% 0)'}} />
+                                <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(0 80%, 0 100%, 20% 100%, 20% 80%, 0 80%)'}} />
+                                <div className="absolute inset-0 border border-primary" style={{clipPath: 'polygon(100% 100%, 100% 80%, 80% 80%, 80% 100%, 100% 100%)'}} />
+                                <div className="w-1 h-1 bg-primary rounded-full" />
+                              </div>
+                              <p className="font-mono font-bold text-sm text-foreground uppercase tracking-wider">{strategy.title}</p>
                             </div>
-                            <p className="font-mono font-bold text-sm text-foreground uppercase tracking-wider">{strategy.title}</p>
+                            <p className="text-xs text-muted-foreground font-mono">{strategy.description}</p>
                           </div>
-                          <p className="text-xs text-muted-foreground font-mono">{strategy.description}</p>
-                          <div className="flex items-center gap-1 mt-3 text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="w-fit px-0 text-primary hover:text-primary hover:bg-transparent opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleStrategyLearnMore();
+                            }}
+                          >
                             <span className="text-xs font-mono uppercase tracking-wider">Learn more</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </div>
+                            <ArrowRight className="ml-1 w-3 h-3" />
+                          </Button>
                         </div>
                       </CardContent>
                     </Card>
