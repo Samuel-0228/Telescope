@@ -147,15 +147,6 @@ const buildLeaderboardFromAnalyses = (analyses: AnalyzedChannelResponse[]): Lead
 
 export const refreshLeaderboard = async (): Promise<LeaderboardEntry[]> => {
   const topN = 10;
-
-  const refreshedFromPosts = await repository.refreshLeaderboardFromPosts(topN);
-  if (refreshedFromPosts) {
-    const fromPosts = await repository.readLeaderboard();
-    if (fromPosts?.length) {
-      return fromPosts;
-    }
-  }
-
   const trackedChannels = await repository.listTrackedChannels(topN);
   if (!trackedChannels.length) {
     return [];
